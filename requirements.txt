@@ -1,0 +1,5 @@
+SQLAlchemy==2.0.36
+bcrypt==4.1.2
+click==8.1.7
+pytest==7.4.3
+pytest-cov==4.1.0
