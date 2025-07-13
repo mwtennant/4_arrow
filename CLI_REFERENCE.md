@@ -125,6 +125,88 @@ Login successful. Welcome, John Doe!
 
 ---
 
+## User Creation Commands
+
+### create
+
+Create a new user in the system. Users can be created as non-members (without email) or members (with email).
+
+**Syntax:**
+
+```bash
+python main.py create --first <first_name> --last <last_name> [--address <address>] [--usbc_id <usbc_id>] [--tnba_id <tnba_id>] [--phone <phone>] [--email <email>]
+```
+
+**Multi-line format (for readability):**
+
+```bash
+python main.py create \
+  --first <first_name> \
+  --last <last_name> \
+  [--address <address>] \
+  [--usbc_id <usbc_id>] \
+  [--tnba_id <tnba_id>] \
+  [--phone <phone>] \
+  [--email <email>]
+```
+
+**Required Options:**
+
+- `--first` - First name (cannot be empty)
+- `--last` - Last name (cannot be empty)
+
+**Optional Options:**
+
+- `--address` - User address
+- `--usbc_id` - USBC ID (must be unique if provided)
+- `--tnba_id` - TNBA ID (must be unique if provided)
+- `--phone` - Phone number
+- `--email` - Email address (must be unique if provided)
+
+**Examples:**
+
+```bash
+# Create non-member bowler (minimum required fields)
+python main.py create --first Bob --last Lane
+
+# Create member with email
+python main.py create --first Alice --last Smith --email alice@example.com
+
+# Create user with all fields
+python main.py create --first John --last Doe --email john@example.com --phone 555-1234 --address "123 Main St" --usbc_id 12345 --tnba_id 67890
+
+# Create user with all fields (multi-line format)
+python main.py create \
+  --first John \
+  --last Doe \
+  --email john@example.com \
+  --phone 555-1234 \
+  --address "123 Main St" \
+  --usbc_id 12345 \
+  --tnba_id 67890
+```
+
+**Success Output:**
+
+```
+# Without email
+User created successfully: Bob Lane
+
+# With email
+User created successfully: Alice Smith (alice@example.com)
+```
+
+**Error Cases:**
+
+- Empty first name: `ERROR: First name cannot be empty` (Exit code: 3)
+- Empty last name: `ERROR: Last name cannot be empty` (Exit code: 3)
+- Duplicate email: `ERROR: Email already exists. Try using get-profile to find the existing user.` (Exit code: 2)
+- Duplicate USBC ID: `ERROR: USBC ID already exists in the database.` (Exit code: 2)
+- Duplicate TNBA ID: `ERROR: TNBA ID already exists in the database.` (Exit code: 2)
+- Database error: `ERROR: Database error occurred: <details>` (Exit code: 1)
+
+---
+
 ## Profile Management Commands
 
 ### get-profile
@@ -287,8 +369,9 @@ python main.py get-profile --help
 ## Exit Codes
 
 - `0` - Success
-- `1` - Error (user not found, validation error, etc.)
-- `2` - CLI validation error (missing required options)
+- `1` - Error (user not found, validation error, database error, etc.)
+- `2` - Duplicate constraint violation (email, USBC ID, TNBA ID already exists)
+- `3` - Empty required field validation error (first/last name cannot be empty)
 
 ---
 
@@ -305,10 +388,26 @@ python main.py get-profile --help
 
 ## Common Workflows
 
-### Create and Manage a User
+### Create Users (Non-Members and Members)
 
 ```bash
-# 1. Create user
+# 1. Create non-member bowler (minimum fields)
+python main.py create --first Bob --last Lane
+
+# 2. Create member with email
+python main.py create --first Alice --last Smith --email alice@example.com
+
+# 3. Create full user with all details
+python main.py create --first John --last Doe --email john@example.com --phone 555-1234 --address "123 Main St" --usbc_id 12345 --tnba_id 67890
+
+# 4. View created user
+python main.py get-profile --user-id 1
+```
+
+### Create and Manage a User Account (Full Authentication)
+
+```bash
+# 1. Create user account with authentication
 python main.py signup --email user@example.com --password pass123 --first John --last Doe --phone 555-1234
 
 # 2. View profile

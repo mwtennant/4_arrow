@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Column, Integer, String, DateTime, Text
+from sqlalchemy import Column, Integer, String, DateTime, Text, Boolean
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.sql import func
 
@@ -16,14 +16,15 @@ class User(Base):
     __tablename__ = 'users'
     
     id = Column(Integer, primary_key=True, autoincrement=True)
-    email = Column(String(255), unique=True, nullable=False)
-    password_hash = Column(Text, nullable=False)
+    email = Column(String(255), unique=True, nullable=True)
+    password_hash = Column(Text, nullable=True)
     first_name = Column(String(100), nullable=False)
     last_name = Column(String(100), nullable=False)
-    phone = Column(String(20), nullable=False)
+    phone = Column(String(20), nullable=True)
     address = Column(Text, nullable=True)
     usbc_id = Column(String(50), nullable=True)
     tnba_id = Column(String(50), nullable=True)
+    is_member = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime, default=func.now())
     
     def __repr__(self) -> str:

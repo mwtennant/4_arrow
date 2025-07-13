@@ -8,6 +8,8 @@ import click
 from core.auth import auth_manager, AuthenticationError
 from core.profile import get_profile, display_profile, edit_profile, delete_profile
 from storage.database import db_manager
+from src.commands.create import create_user, validate_create_args
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 
 @click.group()
@@ -153,6 +155,75 @@ def delete_profile_cmd(user_id: int, confirm: Optional[str]):
         
     except Exception as e:
         click.echo(f"ERROR: {e}", err=True)
+        sys.exit(1)
+
+
+@cli.command()
+@click.option('--first', required=True, help='First name (required)')
+@click.option('--last', required=True, help='Last name (required)')
+@click.option('--address', help='User address (optional)')
+@click.option('--usbc_id', help='USBC ID (optional)')
+@click.option('--tnba_id', help='TNBA ID (optional)')
+@click.option('--phone', help='Phone number (optional)')
+@click.option('--email', help='Email address (optional)')
+def create(
+    first: str,
+    last: str,
+    address: Optional[str] = None,
+    usbc_id: Optional[str] = None,
+    tnba_id: Optional[str] = None,
+    phone: Optional[str] = None,
+    email: Optional[str] = None
+):
+    """Create a new user."""
+    # Validate required arguments
+    validate_create_args(first, last)
+    
+    try:
+        user = create_user(
+            first=first,
+            last=last,
+            address=address,
+            usbc_id=usbc_id,
+            tnba_id=tnba_id,
+            phone=phone,
+            email=email
+        )
+        
+        # Success message
+        if email:
+            click.echo(f"User created successfully: {user.first_name} {user.last_name} ({user.email})")
+        else:
+            click.echo(f"User created successfully: {user.first_name} {user.last_name}")
+        
+    except ValueError as e:
+        if "First name cannot be empty" in str(e):
+            click.echo("ERROR: First name cannot be empty", err=True)
+            sys.exit(3)
+        elif "Last name cannot be empty" in str(e):
+            click.echo("ERROR: Last name cannot be empty", err=True)
+            sys.exit(3)
+        else:
+            click.echo(f"ERROR: {e}", err=True)
+            sys.exit(1)
+    except IntegrityError as e:
+        if "Email already exists" in str(e):
+            click.echo("ERROR: Email already exists. Try using get-profile to find the existing user.", err=True)
+            sys.exit(2)
+        elif "USBC ID already exists" in str(e):
+            click.echo("ERROR: USBC ID already exists in the database.", err=True)
+            sys.exit(2)
+        elif "TNBA ID already exists" in str(e):
+            click.echo("ERROR: TNBA ID already exists in the database.", err=True)
+            sys.exit(2)
+        else:
+            click.echo(f"ERROR: {e}", err=True)
+            sys.exit(1)
+    except SQLAlchemyError as e:
+        click.echo(f"ERROR: Database error occurred: {e}", err=True)
+        sys.exit(1)
+    except Exception as e:
+        click.echo(f"ERROR: An unexpected error occurred: {e}", err=True)
         sys.exit(1)
 
 
