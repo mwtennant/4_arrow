@@ -18,10 +18,10 @@
 ## Context Engineering Steps for each slice
 
 1. Add that INITIAL file.
-2. claude /generate-prp INITIAL_phase1_user_signup_auth.md
-3. Review the PRP (ensure it doesn’t pull contacts/merge in).
-4. /execute-prp PRPs/phase1_user_signup_auth.md
-5. Manually run signup / login to verify.
+2. claude /generate-prp {phase name}.md
+3. Review the PRP
+4. /execute-prp PRPs/ {phase name}.md
+5. Manually run new commands to verify.
 6. Merge branch → Phase 1 done.
 
 ## How a phase wraps up
