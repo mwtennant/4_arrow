@@ -340,6 +340,188 @@ Profile deleted.
 
 ---
 
+### list-users
+
+List all users in the system with optional filtering capabilities. This command supports flexible search by allowing operators to apply zero or multiple filters to narrow down results.
+
+**Syntax:**
+
+```bash
+python main.py list-users [--first <first_name>] [--last <last_name>] [--email <email>] [--phone <phone>] [--address <address>] [--usbc_id <usbc_id>] [--tnba_id <tnba_id>]
+```
+
+**All Options are Optional (Filters):**
+
+- `--first` - Filter by first name (partial match, case-insensitive)
+- `--last` - Filter by last name (partial match, case-insensitive)
+- `--email` - Filter by email address (partial match, case-insensitive)
+- `--phone` - Filter by phone number (partial match, case-insensitive)
+- `--address` - Filter by address (partial match, case-insensitive)
+- `--usbc_id` - Filter by USBC ID (exact match)
+- `--tnba_id` - Filter by TNBA ID (exact match)
+
+**Filter Behavior:**
+
+- **Partial matching:** String fields (first, last, email, phone, address) support partial, case-insensitive matching
+- **Exact matching:** ID fields (usbc_id, tnba_id) require exact matches
+- **Multiple filters:** All filters are combined with logical AND operations (not OR)
+- **Empty filters:** Empty strings or whitespace-only filters are ignored
+
+**Examples:**
+
+```bash
+# List all users in the system
+python main.py list-users
+
+# Find users by first name
+python main.py list-users --first John
+
+# Find users by last name
+python main.py list-users --last Smith
+
+# Find users by email domain
+python main.py list-users --email @gmail.com
+
+# Find users by phone area code
+python main.py list-users --phone 555
+
+# Find users by address
+python main.py list-users --address "Main St"
+
+# Find users by exact USBC ID
+python main.py list-users --usbc_id 12345
+
+# Find users by exact TNBA ID
+python main.py list-users --tnba_id 67890
+
+# Combine multiple filters (AND logic)
+python main.py list-users --first John --email john@example.com
+
+# Complex multi-field search
+python main.py list-users --first Alice --address "Main St" --phone 555
+```
+
+**Sample Output:**
+
+```
+┏━━━━━━━━━┳━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━┓
+┃ User ID ┃ First ┃ Last  ┃ Email                  ┃ Phone        ┃ Address                ┃ USBC ID ┃ TNBA ID ┃
+┡━━━━━━━━━╇━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━┩
+│ 1       │ John  │ Doe   │ john@example.com       │ 555-1234     │ 123 Main St            │ 12345   │ 67890   │
+│ 2       │ Jane  │ Smith │ jane@example.com       │ 555-5678     │ 456 Oak Ave            │ 54321   │ 09876   │
+│ 3       │ Bob   │ Lane  │                        │              │                        │         │         │
+└─────────┴───────┴───────┴────────────────────────┴──────────────┴────────────────────────┴─────────┴─────────┘
+```
+
+**Empty Results:**
+
+When no users match the filter criteria:
+
+```
+No users found matching criteria.
+```
+
+**Error Cases:**
+
+- Database connection failure: `ERROR: Database error occurred: <details>` (Exit code: 1)
+- Unexpected error: `ERROR: An unexpected error occurred: <details>` (Exit code: 1)
+
+**Use Cases:**
+
+- **Find all users:** Run without any filters to see complete user list
+- **Search by name:** Use `--first` and/or `--last` to find users by name
+- **Contact lookup:** Use `--email` or `--phone` to find users by contact info
+- **ID verification:** Use `--usbc_id` or `--tnba_id` for exact ID matches
+- **Address search:** Use `--address` to find users in specific locations
+- **Complex filtering:** Combine multiple filters to narrow down results
+
+---
+
+### merge
+
+Merge one or more user profiles into a main profile. This resolves duplicate or overlapping user records by combining data and handling conflicts through interactive prompts.
+
+**Syntax:**
+
+```bash
+python main.py merge --main-id <main_user_id> --merge-id <merge_user_id> [--merge-id <additional_merge_user_id>]...
+```
+
+**Required Options:**
+
+- `--main-id` - ID of the primary user to merge into (integer)
+- `--merge-id` - ID(s) of user(s) to merge (integer, can be repeated for multiple merges)
+
+**Examples:**
+
+```bash
+# Merge a single user into another
+python main.py merge --main-id 3 --merge-id 5
+
+# Merge multiple users into a main profile
+python main.py merge --main-id 3 --merge-id 5 --merge-id 11
+
+# Example with more users
+python main.py merge --main-id 1 --merge-id 2 --merge-id 3 --merge-id 4
+```
+
+**Interactive Conflict Resolution:**
+
+When conflicting field values are detected (different non-empty values for email, phone, address, usbc_id, or tnba_id), the system will prompt for resolution:
+
+```
+Conflicting phone numbers found:
+Main user (ID 3): 555-1234
+Merge user (ID 5): 555-5678
+Choose which value to keep [1=main, 2=merge, s=skip]: 1
+
+Conflicting addresses found:
+Main user (ID 3): 123 Main St
+Merge user (ID 5): 456 Oak Ave
+Choose which value to keep [1=main, 2=merge, s=skip]: 2
+
+Summary of changes:
+- Phone: Keeping main user value (555-1234)
+- Address: Using merge user value (456 Oak Ave)
+
+Proceed with merge? [y/N]: y
+```
+
+**Conflict Resolution Options:**
+- `1` - Keep the main user's value
+- `2` - Keep the merge user's value
+- `s` - Skip this field (keep main user's value unchanged)
+
+**Final Confirmation:**
+After resolving all conflicts, the system shows a summary and asks for final confirmation before completing the merge.
+
+**Success Output:**
+
+```
+Profile merge completed successfully.
+```
+
+**Merge Behavior:**
+- Non-conflicting fields: Merge user data fills empty fields in main user
+- Conflicting fields: Interactive resolution required
+- Post-merge: Merged users are deleted, all data consolidated in main user
+- Transaction safety: All operations wrapped in database transaction
+
+**Error Cases:**
+
+- Invalid main user ID: `ERROR: Main user with ID <id> not found` (Exit code: 4)
+- Invalid merge user ID: `ERROR: Merge user with ID <id> not found` (Exit code: 4)
+- Self-merge attempt: `ERROR: Cannot merge user <id> into themselves` (Exit code: 4)
+- Missing main ID: `ERROR: --main-id is required` (Exit code: 4)
+- Missing merge IDs: `ERROR: At least one --merge-id is required` (Exit code: 4)
+- Database error: `ERROR: Database error occurred: <details>` (Exit code: 1)
+
+**User Cancellation:**
+- Users can cancel the operation at any time by responding `n` to the final confirmation
+- Users can press Ctrl+C to abort during interactive prompts
+
+---
+
 ## General Commands
 
 ### help
@@ -372,6 +554,7 @@ python main.py get-profile --help
 - `1` - Error (user not found, validation error, database error, etc.)
 - `2` - Duplicate constraint violation (email, USBC ID, TNBA ID already exists)
 - `3` - Empty required field validation error (first/last name cannot be empty)
+- `4` - Invalid user ID or merge validation error (user not found, self-merge attempt)
 
 ---
 
@@ -431,4 +614,50 @@ python main.py get-profile --user-id 1
 python main.py get-profile --email user@example.com
 python main.py get-profile --usbc_id 123456
 python main.py get-profile --tnba_id 789012
+```
+
+### User Search and Listing
+
+```bash
+# List all users in the system
+python main.py list-users
+
+# Find users by name
+python main.py list-users --first John
+python main.py list-users --last Smith
+
+# Find users by contact information
+python main.py list-users --email john@example.com
+python main.py list-users --phone 555-1234
+
+# Find users by IDs
+python main.py list-users --usbc_id 12345
+python main.py list-users --tnba_id 67890
+
+# Complex searches with multiple filters
+python main.py list-users --first John --last Doe
+python main.py list-users --phone 555 --address "Main St"
+python main.py list-users --first Alice --email alice@example.com --phone 555
+
+# Search by partial matches
+python main.py list-users --email @gmail.com
+python main.py list-users --address "Main St"
+python main.py list-users --phone 555
+```
+
+### Merge Duplicate Profiles
+
+```bash
+# 1. Find potential duplicate users
+python main.py get-profile --email john@example.com
+python main.py get-profile --email john.doe@example.com
+
+# 2. Merge the duplicate into the main profile
+python main.py merge --main-id 3 --merge-id 5
+
+# 3. Verify the merge was successful
+python main.py get-profile --user-id 3
+
+# 4. Multiple user merge example
+python main.py merge --main-id 1 --merge-id 2 --merge-id 3
 ```
