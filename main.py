@@ -9,6 +9,8 @@ from core.auth import auth_manager, AuthenticationError
 from core.profile import get_profile, display_profile, edit_profile, delete_profile
 from storage.database import db_manager
 from src.commands.create import create_user, validate_create_args
+from src.commands.merge import merge_profiles, validate_merge_args, handle_merge_errors
+from src.commands.list_users import list_users, display_users
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 
@@ -219,6 +221,62 @@ def create(
         else:
             click.echo(f"ERROR: {e}", err=True)
             sys.exit(1)
+    except SQLAlchemyError as e:
+        click.echo(f"ERROR: Database error occurred: {e}", err=True)
+        sys.exit(1)
+    except Exception as e:
+        click.echo(f"ERROR: An unexpected error occurred: {e}", err=True)
+        sys.exit(1)
+
+
+@cli.command()
+@click.option('--main-id', type=int, required=True, help='ID of the main user to merge into')
+@click.option('--merge-id', type=int, multiple=True, required=True, help='ID(s) of user(s) to merge (can be repeated)')
+def merge(main_id: int, merge_id: tuple):
+    """Merge one or more user profiles into a main profile."""
+    merge_ids = list(merge_id)
+    
+    # Validate arguments
+    validate_merge_args(main_id, merge_ids)
+    
+    try:
+        merge_profiles(main_id, merge_ids)
+        
+    except Exception as e:
+        handle_merge_errors(e)
+
+
+@cli.command(name='list-users')
+@click.option('--first', help='First name filter (partial match)')
+@click.option('--last', help='Last name filter (partial match)')
+@click.option('--email', help='Email filter (partial match)')
+@click.option('--phone', help='Phone filter (partial match)')
+@click.option('--address', help='Address filter (partial match)')
+@click.option('--usbc_id', help='USBC ID filter (exact match)')
+@click.option('--tnba_id', help='TNBA ID filter (exact match)')
+def list_users_cmd(
+    first: Optional[str] = None,
+    last: Optional[str] = None,
+    email: Optional[str] = None,
+    phone: Optional[str] = None,
+    address: Optional[str] = None,
+    usbc_id: Optional[str] = None,
+    tnba_id: Optional[str] = None
+):
+    """List users with optional filters."""
+    try:
+        users = list_users(
+            first=first,
+            last=last,
+            email=email,
+            phone=phone,
+            address=address,
+            usbc_id=usbc_id,
+            tnba_id=tnba_id
+        )
+        
+        display_users(users)
+        
     except SQLAlchemyError as e:
         click.echo(f"ERROR: Database error occurred: {e}", err=True)
         sys.exit(1)
