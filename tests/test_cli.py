@@ -489,3 +489,95 @@ class TestCreateUserCLI:
         
         assert result.exit_code == 1
         assert "ERROR: Some other validation error" in result.output
+
+
+class TestRemoveOrgUserCLI:
+    """Test cases for remove-org-user CLI command integration."""
+    
+    @pytest.fixture
+    def runner(self):
+        """Create a CLI test runner."""
+        return CliRunner()
+    
+    @patch('src.commands.remove_org_user.remove_users_from_organization')
+    def test_remove_org_user_cli_success(self, mock_remove, runner):
+        """Test successful remove-org-user CLI command."""
+        result = runner.invoke(cli, [
+            'remove-org-user',
+            '--organization-id', '1',
+            '--user-id', '123'
+        ])
+        
+        assert result.exit_code == 0
+        mock_remove.assert_called_once_with(
+            organization_id=1,
+            user_ids=[123]
+        )
+    
+    @patch('src.commands.remove_org_user.remove_users_from_organization')
+    def test_remove_org_user_cli_multiple_users(self, mock_remove, runner):
+        """Test remove-org-user CLI command with multiple users."""
+        result = runner.invoke(cli, [
+            'remove-org-user',
+            '--organization-id', '1',
+            '--user-id', '123',
+            '--user-id', '456',
+            '--user-id', '789'
+        ])
+        
+        assert result.exit_code == 0
+        mock_remove.assert_called_once_with(
+            organization_id=1,
+            user_ids=[123, 456, 789]
+        )
+    
+    @patch('src.commands.remove_org_user.remove_users_from_organization')
+    def test_remove_org_user_cli_with_force(self, mock_remove, runner):
+        """Test remove-org-user CLI command with force flag."""
+        result = runner.invoke(cli, [
+            'remove-org-user',
+            '--organization-id', '1',
+            '--user-id', '123',
+            '--force'
+        ])
+        
+        assert result.exit_code == 0
+        mock_remove.assert_called_once_with(
+            organization_id=1,
+            user_ids=[123]
+        )
+    
+    def test_remove_org_user_cli_missing_organization_id(self, runner):
+        """Test remove-org-user CLI command missing organization ID."""
+        result = runner.invoke(cli, [
+            'remove-org-user',
+            '--user-id', '123'
+        ])
+        
+        assert result.exit_code == 2
+        assert "Missing option '--organization-id'" in result.output
+    
+    def test_remove_org_user_cli_missing_user_id(self, runner):
+        """Test remove-org-user CLI command missing user ID."""
+        result = runner.invoke(cli, [
+            'remove-org-user',
+            '--organization-id', '1'
+        ])
+        
+        assert result.exit_code == 2
+        assert "Missing option '--user-id'" in result.output
+    
+    @patch('src.commands.remove_org_user.remove_users_from_organization')
+    def test_remove_org_user_cli_organization_not_found(self, mock_remove, runner):
+        """Test remove-org-user CLI command with organization not found."""
+        from click import ClickException
+        mock_remove.side_effect = ClickException("Organization with ID 999 not found")
+        
+        result = runner.invoke(cli, [
+            'remove-org-user',
+            '--organization-id', '999',
+            '--user-id', '123'
+        ])
+        
+        assert result.exit_code == 2
+        assert "Organization with ID 999 not found" in result.output

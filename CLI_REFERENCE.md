@@ -665,3 +665,364 @@ python main.py get-profile --user-id 3
 # 4. Multiple user merge example
 python main.py merge --main-id 1 --merge-id 2 --merge-id 3
 ```
+
+## Organization Management Commands
+
+### create-organization
+
+Create a new organization.
+
+**Syntax:**
+
+```bash
+python main.py create-organization --name <name> [--address <address>] [--phone <phone>] [--email <email>] [--website <website>]
+```
+
+**Required Options:**
+
+- `--name` - Organization name (must be unique)
+
+**Optional Options:**
+
+- `--address` - Organization address
+- `--phone` - Organization phone number
+- `--email` - Organization email address
+- `--website` - Organization website URL
+
+**Examples:**
+
+```bash
+# Create organization with just name
+python main.py create-organization --name "Bowling League Association"
+
+# Create organization with all details
+python main.py create-organization \
+  --name "Professional Bowling Alliance" \
+  --address "123 Strike Lane, Pinville, ST 12345" \
+  --phone "555-BOWL-123" \
+  --email "info@bowlingalliance.org" \
+  --website "https://bowlingalliance.org"
+```
+
+**Success Output:**
+
+```
+Organization created successfully: Professional Bowling Alliance (ID: 1)
+```
+
+**Error Cases:**
+
+- Duplicate name: `ERROR: Organization name already exists`
+- Missing required name: `Missing option --name`
+
+---
+
+### edit-organization  
+
+Update an existing organization's details.
+
+**Syntax:**
+
+```bash
+python main.py edit-organization --organization-id <id> [--name <name>] [--address <address>] [--phone <phone>] [--email <email>] [--website <website>]
+```
+
+**Required Options:**
+
+- `--organization-id` - ID of organization to edit
+
+**Optional Options:**
+
+- `--name` - New organization name (must be unique)
+- `--address` - New organization address
+- `--phone` - New organization phone number
+- `--email` - New organization email address
+- `--website` - New organization website URL
+
+**Examples:**
+
+```bash
+# Update single field
+python main.py edit-organization --organization-id 1 --name "Updated Bowling League"
+
+# Update multiple fields
+python main.py edit-organization \
+  --organization-id 1 \
+  --name "Modern Bowling Alliance" \
+  --email "contact@modernbowling.org" \
+  --phone "555-MODERN-1"
+
+# No-op (succeeds with no changes)
+python main.py edit-organization --organization-id 1
+```
+
+**Success Output:**
+
+```
+(Command succeeds silently with exit code 0)
+```
+
+**Error Cases:**
+
+- Missing organization ID: `Missing option --organization-id`
+- Organization not found: `Organization not found.` (exit code 2)
+- Name already exists: `Organization name already exists.` (exit code 3)
+- Empty field values: `Empty value not allowed` (exit code 1)
+
+**Exit Codes:**
+
+- `0`: Success (including no-op scenarios)
+- `1`: Missing organization ID or empty field values
+- `2`: Organization not found
+- `3`: Organization name conflict
+
+### create-org-permission
+
+Create a new permission for an organization.
+
+**Syntax:**
+
+```bash
+python main.py create-org-permission --organization-id <id> --name <name> [--description <description>]
+```
+
+**Required Options:**
+
+- `--organization-id` - Organization ID (must exist)
+- `--name` - Permission name (max 64 characters, case-insensitive uniqueness within org)
+
+**Optional Options:**
+
+- `--description` - Permission description (max 255 characters)
+
+**Examples:**
+
+```bash
+# Create permission with name only
+python main.py create-org-permission --organization-id 1 --name "Create Tournament"
+
+# Create permission with description
+python main.py create-org-permission \
+  --organization-id 1 \
+  --name "Edit Scores" \
+  --description "Allow editing of tournament scores"
+
+# Create permission with long description
+python main.py create-org-permission \
+  --organization-id 1 \
+  --name "Admin Access" \
+  --description "Full administrative access to all tournament features and data management"
+```
+
+**Success Output:**
+
+```
+Permission created successfully!
+Permission ID: 1
+Name: Create Tournament
+Organization ID: 1
+Description: Allow creating new tournaments
+```
+
+**Error Cases:**
+
+- Missing required arguments: `Missing option '--organization-id'` (exit code 2)
+- Organization not found: `ERROR: Organization not found` (exit code 2)
+- Duplicate permission name: `ERROR: Permission with this name already exists in the organization` (exit code 3)
+- Name too long: `ERROR: Permission name cannot exceed 64 characters` (exit code 1)
+- Description too long: `ERROR: Permission description cannot exceed 255 characters` (exit code 1)
+- Empty name: `ERROR: Permission name cannot be empty` (exit code 1)
+
+**Exit Codes:**
+
+- `0`: Success
+- `1`: Validation error (empty name, name/description too long)
+- `2`: Organization not found
+- `3`: Duplicate permission name in organization
+
+**Case-Insensitive Uniqueness:**
+
+Permission names are unique within each organization on a case-insensitive basis:
+
+```bash
+# These would conflict if both attempted in the same organization:
+python main.py create-org-permission --organization-id 1 --name "Create Tournament"
+python main.py create-org-permission --organization-id 1 --name "create tournament"  # ERROR
+python main.py create-org-permission --organization-id 1 --name "CREATE TOURNAMENT"  # ERROR
+```
+
+### create-org-role
+
+Create a new role for an organization with optional permission assignments.
+
+**Syntax:**
+
+```bash
+python main.py create-org-role --organization-id <id> --name <name> [--permissions <permission_list>]
+```
+
+**Required Options:**
+
+- `--organization-id` - Organization ID (must exist)
+- `--name` - Role name (max 64 characters, case-insensitive uniqueness within org)
+
+**Optional Options:**
+
+- `--permissions` - Comma-separated list of permission names to assign to this role
+
+**Examples:**
+
+```bash
+# Create role with no permissions
+python main.py create-org-role --organization-id 1 --name "Tournament Director"
+
+# Create role with single permission
+python main.py create-org-role \
+  --organization-id 1 \
+  --name "Score Keeper" \
+  --permissions "Edit Scores"
+
+# Create role with multiple permissions
+python main.py create-org-role \
+  --organization-id 1 \
+  --name "Tournament Manager" \
+  --permissions "Create Tournament,Edit Tournament,Edit Scores,Manage Users"
+
+# Create role with permissions (spaces around commas are handled)
+python main.py create-org-role \
+  --organization-id 1 \
+  --name "Administrator" \
+  --permissions "Admin Access, Financial Management, Manage Users"
+```
+
+**Success Output:**
+
+```
+Role created successfully!
+Role ID: 1
+Name: Tournament Director
+Organization ID: 1
+```
+
+With permissions:
+```
+Role created successfully!
+Role ID: 2
+Name: Tournament Manager
+Organization ID: 1
+Assigned permissions: Create Tournament, Edit Tournament, Edit Scores, Manage Users
+```
+
+**Exit Codes:**
+
+- `0`: Success
+- `1`: Validation error (empty name, name too long, missing required options)
+- `2`: Organization not found
+- `3`: Duplicate role name in organization
+- `4`: One or more permissions not found in organization
+
+**Case-Insensitive Uniqueness:**
+
+Role names are unique within each organization on a case-insensitive basis:
+
+```bash
+# These would conflict if both attempted in the same organization:
+python main.py create-org-role --organization-id 1 --name "Tournament Director"
+python main.py create-org-role --organization-id 1 --name "tournament director"  # ERROR
+python main.py create-org-role --organization-id 1 --name "TOURNAMENT DIRECTOR"  # ERROR
+```
+
+**Permission Validation:**
+
+All permissions in the `--permissions` list must exist in the specified organization:
+
+```bash
+# This will fail if "NonExistent Permission" doesn't exist in organization 1
+python main.py create-org-role \
+  --organization-id 1 \
+  --name "Test Role" \
+  --permissions "Create Tournament,NonExistent Permission"  # ERROR: exit code 4
+```
+
+---
+
+## Organization Workflow Examples
+
+### Create and Manage Organizations
+
+```bash
+# 1. Create a new organization
+python main.py create-organization --name "City Bowling League" --email "admin@citybowling.org"
+
+# 2. Update organization details
+python main.py edit-organization --organization-id 1 --address "456 New Location Blvd"
+
+# 3. Update multiple fields
+python main.py edit-organization \
+  --organization-id 1 \
+  --phone "555-UPDATE-1" \
+  --website "https://citybowling.org"
+```
+
+### Create Organization Permissions
+
+```bash
+# 1. Create basic permissions for tournament management
+python main.py create-org-permission --organization-id 1 --name "Create Tournament"
+python main.py create-org-permission --organization-id 1 --name "Edit Tournament"
+python main.py create-org-permission --organization-id 1 --name "Delete Tournament"
+
+# 2. Create permissions with descriptive details
+python main.py create-org-permission \
+  --organization-id 1 \
+  --name "Edit Scores" \
+  --description "Allow editing of individual game and series scores"
+
+python main.py create-org-permission \
+  --organization-id 1 \
+  --name "Manage Users" \
+  --description "Create, edit, and delete user accounts and profiles"
+
+# 3. Create administrative permissions
+python main.py create-org-permission \
+  --organization-id 1 \
+  --name "Admin Access" \
+  --description "Full administrative access to all features"
+
+python main.py create-org-permission \
+  --organization-id 1 \
+  --name "Financial Management" \
+  --description "Access to tournament fees, payouts, and financial reports"
+```
+
+### Create Organization Roles
+
+```bash
+# 1. Create basic roles without permissions (permissions assigned later)
+python main.py create-org-role --organization-id 1 --name "Tournament Director"
+python main.py create-org-role --organization-id 1 --name "Score Keeper"
+python main.py create-org-role --organization-id 1 --name "Lane Manager"
+
+# 2. Create roles with specific permission sets
+python main.py create-org-role \
+  --organization-id 1 \
+  --name "Tournament Manager" \
+  --permissions "Create Tournament,Edit Tournament,Delete Tournament"
+
+python main.py create-org-role \
+  --organization-id 1 \
+  --name "Score Administrator" \
+  --permissions "Edit Scores,Manage Users"
+
+# 3. Create comprehensive administrative role
+python main.py create-org-role \
+  --organization-id 1 \
+  --name "System Administrator" \
+  --permissions "Admin Access,Financial Management,Manage Users,Create Tournament,Edit Tournament,Delete Tournament,Edit Scores"
+
+# 4. Create limited access roles
+python main.py create-org-role \
+  --organization-id 1 \
+  --name "Volunteer" \
+  --permissions "Edit Scores"
+```

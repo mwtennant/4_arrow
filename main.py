@@ -16,6 +16,7 @@ from src.commands.edit_organization import edit_organization_command
 from src.commands.create_org_permission import create_org_permission_command
 from src.commands.create_org_role import create_org_role_command
 from src.commands.add_org_user import add_org_user_command
+from src.commands.remove_org_user import remove_org_user_command
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 
@@ -461,6 +462,9 @@ cli.add_command(create_org_role_command, name='create-org-role')
 
 # Add the add-org-user command to the CLI group
 cli.add_command(add_org_user_command, name='add-org-user')
+
+# Add the remove-org-user command to the CLI group
+cli.add_command(remove_org_user_command, name='remove-org-user')
 
 
 if __name__ == '__main__':
