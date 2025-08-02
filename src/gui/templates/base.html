@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}4th Arrow Tournament Control{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <header class="header">
+        <div class="container">
+            <h1 class="logo">4th Arrow Tournament Control</h1>
+            {% if session.user_id %}
+            <nav class="nav">
+                <ul class="nav-list">
+                    <li class="nav-item">
+                        <a href="{{ url_for('users.list') }}" class="nav-link">Users</a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="#" class="nav-link">Organizations</a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="#" class="nav-link">Tournaments</a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="#" class="nav-link">Settings</a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('auth.logout') }}" class="nav-link">Logout</a>
+                    </li>
+                </ul>
+            </nav>
+            {% endif %}
+        </div>
+    </header>
+
+    <main class="main">
+        <div class="container">
+            {% if session.user_id %}
+            <div class="layout">
+                <aside class="sidebar">
+                    {% block sidebar %}
+                    <nav class="sidebar-nav">
+                        <h3>User Management</h3>
+                        <ul class="sidebar-list">
+                            <li><a href="{{ url_for('users.create') }}" class="sidebar-link">Add User</a></li>
+                            <li><a href="{{ url_for('users.list') }}" class="sidebar-link">List Users</a></li>
+                            <li><a href="{{ url_for('users.search') }}" class="sidebar-link">Search Users</a></li>
+                            <li><a href="{{ url_for('users.merge') }}" class="sidebar-link">Merge Profiles</a></li>
+                        </ul>
+                    </nav>
+                    {% endblock %}
+                </aside>
+            </div>
+            {% endif %}
+            <div class="{% if session.user_id %}content{% else %}content-login{% endif %}">
+                {% block content %}{% endblock %}
+            </div>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <div class="container">
+            <p>&copy; 2024 4th Arrow Tournament Control. All rights reserved.</p>
+        </div>
+    </footer>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <div class="flash-messages">
+                {% for category, message in messages %}
+                    <div class="flash-message flash-{{ category }}">
+                        {{ message }}
+                        <button class="flash-close" onclick="this.parentElement.style.display='none'">&times;</button>
+                    </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+    {% endwith %}
+</body>
+</html>

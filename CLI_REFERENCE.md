@@ -11,6 +11,7 @@ source venv/bin/activate
 ```
 
 **Note about long commands:** For longer commands, you can either:
+
 1. Type the entire command on one line
 2. Use backslashes (`\`) to split the command across multiple lines for readability
 
@@ -488,6 +489,7 @@ Proceed with merge? [y/N]: y
 ```
 
 **Conflict Resolution Options:**
+
 - `1` - Keep the main user's value
 - `2` - Keep the merge user's value
 - `s` - Skip this field (keep main user's value unchanged)
@@ -502,6 +504,7 @@ Profile merge completed successfully.
 ```
 
 **Merge Behavior:**
+
 - Non-conflicting fields: Merge user data fills empty fields in main user
 - Conflicting fields: Interactive resolution required
 - Post-merge: Merged users are deleted, all data consolidated in main user
@@ -517,6 +520,7 @@ Profile merge completed successfully.
 - Database error: `ERROR: Database error occurred: <details>` (Exit code: 1)
 
 **User Cancellation:**
+
 - Users can cancel the operation at any time by responding `n` to the final confirmation
 - Users can press Ctrl+C to abort during interactive prompts
 

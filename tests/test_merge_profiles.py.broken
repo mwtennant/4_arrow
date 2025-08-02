@@ -1,0 +1,580 @@
+"""Enhanced tests for merge profiles command."""
+
+import json
+import pytest
+import tempfile
+from pathlib import Path
+from unittest.mock import patch, MagicMock, mock_open
+from sqlalchemy.exc import SQLAlchemyError
+
+from core.models import User
+from core.logging import log_merge_event, validate_log_entry, MERGE_PROFILE_SCHEMA
+from src.commands.merge import (
+    merge_profiles,
+    validate_merge_args,
+    handle_merge_errors,
+    _detect_conflicts,
+    _resolve_conflicts,
+    _merge_non_conflicting_fields,
+    _confirm_merge,
+    _show_dry_run_preview
+)
+from storage.database import db_manager
+
+
+@pytest.fixture
+def mock_session():
+    """Mock database session."""
+    with patch.object(db_manager, 'get_session') as mock_get_session:
+        mock_session = MagicMock()
+        mock_get_session.return_value = mock_session
+        yield mock_session
+
+
+@pytest.fixture
+def sample_users():
+    """Sample users for testing."""
+    main_user = User(
+        id=1,
+        first_name="John",
+        last_name="Doe",
+        email="john@example.com",
+        phone="555-1234",
+        address="123 Main St",
+        usbc_id="12345",
+        tnba_id="67890"
+    )
+    
+    merge_user = User(
+        id=2,
+        first_name="Jane",
+        last_name="Smith",
+        email="jane@example.com",
+        phone="555-5678",
+        address="456 Oak Ave",
+        usbc_id="54321",
+        tnba_id="09876"
+    )
+    
+    return main_user, merge_user
+
+
+@pytest.fixture
+def temp_logs_dir():
+    """Create temporary logs directory."""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        logs_dir = Path(temp_dir)
+        with patch('core.logging.ensure_logs_directory', return_value=logs_dir):
+            yield logs_dir
+
+
+class TestMergeProfiles:
+    """Test enhanced merge profiles functionality."""
+    
+    def test_merge_single_user_success(self, mock_session, sample_users):
+        """Test successful merge of a single user."""
+        main_user, merge_user = sample_users
+        
+        # Mock database queries
+        mock_session.query.return_value.filter_by.return_value.with_for_update.return_value.first.side_effect = [
+            main_user,  # main user query
+            merge_user   # merge user query
+        ]
+        mock_session.begin.return_value.__enter__.return_value = mock_session
+        mock_session.begin.return_value.__exit__.return_value = None
+        
+        with patch('src.commands.merge.log_merge_event') as mock_log:
+            exit_code = merge_profiles(1, [2], resolution_mode="prefer_main", no_interactive=True)
+        
+        assert exit_code == 0
+        mock_session.commit.assert_called_once()
+        mock_log.assert_called_once()
+        assert merge_user.is_deleted()
+    
+    def test_merge_dry_run_mode(self, mock_session, sample_users):
+        """Test dry-run mode shows preview without database writes."""
+        main_user, merge_user = sample_users
+        
+        mock_session.query.return_value.filter_by.return_value.with_for_update.return_value.first.side_effect = [
+            main_user, merge_user
+        ]
+        mock_session.begin.return_value.__enter__.return_value = mock_session
+        
+        with patch('src.commands.merge._show_dry_run_preview') as mock_preview:
+            exit_code = merge_profiles(1, [2], dry_run=True)
+        
+        assert exit_code == 0
+        mock_preview.assert_called_once()
+        mock_session.commit.assert_not_called()
+        assert not merge_user.is_deleted()
+    
+    def test_merge_with_prefer_main_resolution(self, mock_session, sample_users):
+        """Test automatic conflict resolution preferring main user values."""
+        main_user, merge_user = sample_users
+        
+        mock_session.query.return_value.filter_by.return_value.with_for_update.return_value.first.side_effect = [
+            main_user, merge_user
+        ]
+        mock_session.begin.return_value.__enter__.return_value = mock_session
+        
+        with patch('src.commands.merge.log_merge_event') as mock_log:
+            exit_code = merge_profiles(1, [2], resolution_mode="prefer_main", no_interactive=True)
+        
+        assert exit_code == 0
+        # Main user values should be preserved
+        assert main_user.email == "john@example.com"
+        assert main_user.phone == "555-1234"
+        mock_log.assert_called_once()
+    
+    def test_merge_with_prefer_merge_resolution(self, mock_session, sample_users):
+        """Test automatic conflict resolution preferring merge user values."""
+        main_user, merge_user = sample_users
+        
+        mock_session.query.return_value.filter_by.return_value.with_for_update.return_value.first.side_effect = [
+            main_user, merge_user
+        ]
+        mock_session.begin.return_value.__enter__.return_value = mock_session
+        
+        with patch('src.commands.merge.log_merge_event') as mock_log:
+            exit_code = merge_profiles(1, [2], resolution_mode="prefer_merge", no_interactive=True)
+        
+        assert exit_code == 0
+        # Merge user values should be used
+        assert main_user.email == "jane@example.com"
+        assert main_user.phone == "555-5678"
+        mock_log.assert_called_once()
+    
+    def test_merge_with_prefer_longest_resolution(self, mock_session):
+        """Test automatic conflict resolution preferring longest values."""
+        main_user = User(
+            id=1, first_name="John", last_name="Doe",
+            email="j@example.com", phone="555-1234"
+        )
+        merge_user = User(
+            id=2, first_name="Jane", last_name="Smith", 
+            email="jane.doe@example.com", phone="555-5678-ext123"
+        )
+        
+        mock_session.query.return_value.filter_by.return_value.with_for_update.return_value.first.side_effect = [
+            main_user, merge_user
+        ]
+        mock_session.begin.return_value.__enter__.return_value = mock_session
+        
+        with patch('src.commands.merge.log_merge_event') as mock_log:
+            exit_code = merge_profiles(1, [2], resolution_mode="prefer_longest", no_interactive=True)
+        
+        assert exit_code == 0
+        # Longer values should be used
+        assert main_user.email == "jane.doe@example.com"  # Longer email
+        assert main_user.phone == "555-5678-ext123"  # Longer phone
+        mock_log.assert_called_once()
+    
+    def test_merge_email_conflict_non_interactive_mode(self, mock_session, sample_users):
+        """Test email conflict in non-interactive mode returns exit code 2."""
+        main_user, merge_user = sample_users
+        
+        mock_session.query.return_value.filter_by.return_value.with_for_update.return_value.first.side_effect = [
+            main_user, merge_user
+        ]
+        mock_session.begin.return_value.__enter__.return_value = mock_session
+        
+        exit_code = merge_profiles(1, [2], no_interactive=True)
+        
+        assert exit_code == 2
+        mock_session.commit.assert_not_called()
+    
+    def test_merge_main_user_not_found(self, mock_session):
+        """Test error when main user is not found."""
+        mock_session.query.return_value.filter_by.return_value.with_for_update.return_value.first.return_value = None
+        mock_session.begin.return_value.__enter__.return_value = mock_session
+        
+        exit_code = merge_profiles(1, [2])
+        
+        assert exit_code == 4
+    
+    def test_merge_user_not_found(self, mock_session):
+        """Test error when merge user is not found."""
+        main_user = User(id=1, first_name="John", last_name="Doe")
+        
+        mock_session.query.return_value.filter_by.return_value.with_for_update.return_value.first.side_effect = [
+            main_user,  # main user query
+            None        # merge user query
+        ]
+        mock_session.begin.return_value.__enter__.return_value = mock_session
+        
+        exit_code = merge_profiles(1, [2])
+        
+        assert exit_code == 4
+    
+    def test_merge_deleted_user(self, mock_session):
+        """Test error when trying to merge deleted user."""
+        main_user = User(id=1, first_name="John", last_name="Doe")
+        merge_user = User(id=2, first_name="Jane", last_name="Smith")
+        merge_user.soft_delete()
+        
+        mock_session.query.return_value.filter_by.return_value.with_for_update.return_value.first.side_effect = [
+            main_user, merge_user
+        ]
+        mock_session.begin.return_value.__enter__.return_value = mock_session
+        
+        exit_code = merge_profiles(1, [2])
+        
+        assert exit_code == 4
+    
+    def test_merge_keyboard_interrupt(self, mock_session, sample_users):
+        """Test handling of keyboard interrupt."""
+        main_user, merge_user = sample_users
+        
+        mock_session.query.return_value.filter_by.return_value.with_for_update.return_value.first.side_effect = [
+            main_user, merge_user
+        ]
+        mock_session.begin.return_value.__enter__.return_value = mock_session
+        
+        with patch('src.commands.merge._confirm_merge', side_effect=KeyboardInterrupt):
+            exit_code = merge_profiles(1, [2], resolution_mode="prefer_main")
+        
+        assert exit_code == 5
+        mock_session.rollback.assert_called_once()
+    
+    def test_merge_database_error(self, mock_session):
+        """Test handling of database errors."""
+        mock_session.query.side_effect = SQLAlchemyError("Database error")
+        mock_session.begin.return_value.__enter__.return_value = mock_session
+        
+        exit_code = merge_profiles(1, [2])
+        
+        assert exit_code == 1
+        mock_session.rollback.assert_called_once()
+
+
+class TestDetectConflicts:
+    """Test conflict detection functionality."""
+    
+    def test_detect_conflicts_with_conflicts(self):
+        """Test detecting conflicts between users."""
+        main_user = User(
+            id=1,
+            phone="555-1234",
+            address="123 Main St",
+            email="john@example.com"
+        )
+        
+        merge_user = User(
+            id=2,
+            phone="555-5678",
+            address="456 Oak Ave",
+            email="jane@example.com"
+        )
+        
+        conflicts = _detect_conflicts(main_user, merge_user)
+        
+        assert 'phone' in conflicts
+        assert 'address' in conflicts
+        assert 'email' in conflicts
+        assert conflicts['phone'] == ("555-1234", "555-5678")
+        assert conflicts['address'] == ("123 Main St", "456 Oak Ave")
+        assert conflicts['email'] == ("john@example.com", "jane@example.com")
+    
+    def test_detect_conflicts_no_conflicts(self):
+        """Test no conflicts when one user has empty fields."""
+        main_user = User(
+            id=1,
+            phone="555-1234",
+            address="123 Main St",
+            email="john@example.com"
+        )
+        
+        merge_user = User(
+            id=2,
+            phone=None,
+            address=None,
+            email=None
+        )
+        
+        conflicts = _detect_conflicts(main_user, merge_user)
+        
+        assert len(conflicts) == 0
+    
+    def test_detect_conflicts_both_empty(self):
+        """Test no conflicts when both values are empty."""
+        main_user = User(id=1, phone=None, address=None)
+        merge_user = User(id=2, phone=None, address=None)
+        
+        conflicts = _detect_conflicts(main_user, merge_user)
+        
+        assert len(conflicts) == 0
+    
+    def test_detect_conflicts_same_values(self):
+        """Test no conflicts when users have same values."""
+        main_user = User(
+            id=1,
+            phone="555-1234",
+            address="123 Main St"
+        )
+        
+        merge_user = User(
+            id=2,
+            phone="555-1234",
+            address="123 Main St"
+        )
+        
+        conflicts = _detect_conflicts(main_user, merge_user)
+        
+        assert len(conflicts) == 0
+
+
+class TestResolveConflicts:
+    """Test conflict resolution functionality."""
+    
+    def test_resolve_conflicts_prefer_main(self, sample_users):
+        """Test resolving conflicts by preferring main user values."""
+        main_user, merge_user = sample_users
+        conflicts = {'phone': ('555-1234', '555-5678')}
+        
+        resolved = _resolve_conflicts(main_user, merge_user, conflicts, "prefer_main")
+        
+        assert resolved['phone'] == ('555-1234', 'kept_primary')
+    
+    def test_resolve_conflicts_prefer_merge(self, sample_users):
+        """Test resolving conflicts by preferring merge user values."""
+        main_user, merge_user = sample_users
+        conflicts = {'phone': ('555-1234', '555-5678')}
+        
+        resolved = _resolve_conflicts(main_user, merge_user, conflicts, "prefer_merge")
+        
+        assert resolved['phone'] == ('555-5678', 'kept_duplicate')
+    
+    def test_resolve_conflicts_prefer_longest(self, sample_users):
+        """Test resolving conflicts by preferring longest values."""
+        main_user, merge_user = sample_users
+        conflicts = {'phone': ('555-1234', '555-5678-ext123')}
+        
+        resolved = _resolve_conflicts(main_user, merge_user, conflicts, "prefer_longest")
+        
+        assert resolved['phone'] == ('555-5678-ext123', 'kept_longest')
+    
+    def test_resolve_conflicts_interactive_choose_main(self, sample_users):
+        """Test interactive conflict resolution choosing main."""
+        main_user, merge_user = sample_users
+        conflicts = {'phone': ('555-1234', '555-5678')}
+        
+        with patch('click.prompt', return_value='1'):
+            resolved = _resolve_conflicts(main_user, merge_user, conflicts)
+        
+        assert resolved['phone'] == ('555-1234', 'kept_primary')
+    
+    def test_resolve_conflicts_interactive_choose_merge(self, sample_users):
+        """Test interactive conflict resolution choosing merge."""
+        main_user, merge_user = sample_users
+        conflicts = {'phone': ('555-1234', '555-5678')}
+        
+        with patch('click.prompt', return_value='2'):
+            resolved = _resolve_conflicts(main_user, merge_user, conflicts)
+        
+        assert resolved['phone'] == ('555-5678', 'kept_duplicate')
+    
+    def test_resolve_conflicts_interactive_skip(self, sample_users):
+        """Test interactive conflict resolution skipping."""
+        main_user, merge_user = sample_users
+        conflicts = {'phone': ('555-1234', '555-5678')}
+        
+        with patch('click.prompt', return_value='s'):
+            resolved = _resolve_conflicts(main_user, merge_user, conflicts)
+        
+        assert resolved['phone'] == ('555-1234', 'kept_primary')
+    
+    def test_resolve_conflicts_invalid_then_valid(self, sample_users):
+        """Test interactive resolution with invalid input first."""
+        main_user, merge_user = sample_users
+        conflicts = {'phone': ('555-1234', '555-5678')}
+        
+        with patch('click.prompt', side_effect=['invalid', '1']):
+            resolved = _resolve_conflicts(main_user, merge_user, conflicts)
+        
+        assert resolved['phone'] == ('555-1234', 'kept_primary')
+
+
+class TestMergeNonConflictingFields:
+    """Test merging non-conflicting fields."""
+    
+    def test_merge_non_conflicting_fields(self):
+        """Test merging fields where main user has empty values."""
+        main_user = User(
+            id=1,
+            phone=None,
+            address="123 Main St",
+            usbc_id=None
+        )
+        
+        merge_user = User(
+            id=2,
+            phone="555-1234",
+            address="456 Oak Ave",
+            usbc_id="12345"
+        )
+        
+        filled_fields = _merge_non_conflicting_fields(main_user, merge_user)
+        
+        assert "phone" in filled_fields
+        assert "usbc_id" in filled_fields
+        assert "address" not in filled_fields  # Main user already had value
+        assert main_user.phone == "555-1234"
+        assert main_user.address == "123 Main St"
+        assert main_user.usbc_id == "12345"
+
+
+class TestValidateMergeArgs:
+    """Test merge argument validation."""
+    
+    def test_validate_merge_args_missing_main_id(self):
+        """Test validation with missing main_id."""
+        with patch('click.echo') as mock_echo:
+            with pytest.raises(SystemExit) as exc_info:
+                validate_merge_args(None, [2])
+        
+        assert exc_info.value.code == 4
+        mock_echo.assert_called_with("ERROR: --main-id is required", err=True)
+    
+    def test_validate_merge_args_missing_merge_ids(self):
+        """Test validation with missing merge_ids."""
+        with patch('click.echo') as mock_echo:
+            with pytest.raises(SystemExit) as exc_info:
+                validate_merge_args(1, [])
+        
+        assert exc_info.value.code == 4
+        mock_echo.assert_called_with("ERROR: At least one --merge-id is required", err=True)
+    
+    def test_validate_merge_args_self_merge(self):
+        """Test validation when trying to merge user into themselves."""
+        with patch('click.echo') as mock_echo:
+            with pytest.raises(SystemExit) as exc_info:
+                validate_merge_args(1, [1])
+        
+        assert exc_info.value.code == 4
+        mock_echo.assert_called_with("ERROR: Cannot merge user 1 into themselves", err=True)
+    
+    def test_validate_merge_args_valid(self):
+        """Test validation with valid arguments."""
+        # Should not raise any exception
+        validate_merge_args(1, [2, 3])
+
+
+class TestHandleMergeErrors:
+    """Test error handling functionality."""
+    
+    def test_handle_merge_errors_not_found(self):
+        """Test handling user not found errors."""
+        error = ValueError("Main user with ID 1 not found")
+        
+        exit_code = handle_merge_errors(error)
+        
+        assert exit_code == 4
+    
+    def test_handle_merge_errors_value_error(self):
+        """Test handling general value errors."""
+        error = ValueError("Some validation error")
+        
+        exit_code = handle_merge_errors(error)
+        
+        assert exit_code == 4
+    
+    def test_handle_merge_errors_database_error(self):
+        """Test handling database errors."""
+        error = SQLAlchemyError("Database connection failed")
+        
+        exit_code = handle_merge_errors(error)
+        
+        assert exit_code == 1
+    
+    def test_handle_merge_errors_unexpected_error(self):
+        """Test handling unexpected errors."""
+        error = RuntimeError("Unexpected error")
+        
+        exit_code = handle_merge_errors(error)
+        
+        assert exit_code == 1
+
+
+class TestLogging:
+    """Test logging functionality."""
+    
+    def test_log_merge_event(self, temp_logs_dir):
+        """Test logging merge events."""
+        log_merge_event(1, [2, 3], {"phone": "kept_primary", "email": "kept_duplicate"})
+        
+        log_file = temp_logs_dir / "merge_profile.log"
+        assert log_file.exists()
+        
+        with open(log_file) as f:
+            log_entry = json.loads(f.read().strip())
+        
+        assert log_entry["event"] == "MERGE_PROFILE"
+        assert log_entry["primary_id"] == 1
+        assert log_entry["merged_ids"] == [2, 3]
+        assert log_entry["field_resolutions"]["phone"] == "kept_primary"
+        assert log_entry["field_resolutions"]["email"] == "kept_duplicate"
+    
+    def test_log_entry_validation(self):
+        """Test log entry validation against schema."""
+        valid_entry = {
+            "event": "MERGE_PROFILE",
+            "timestamp": "2024-07-28T15:30:45Z",
+            "primary_id": 1,
+            "merged_ids": [2, 3],
+            "field_resolutions": {"phone": "kept_primary"}
+        }
+        
+        assert validate_log_entry(valid_entry) == True
+    
+    def test_log_entry_validation_invalid(self):
+        """Test log entry validation with invalid entry."""
+        invalid_entry = {
+            "event": "WRONG_EVENT",
+            "primary_id": 1,
+            "merged_ids": [2, 3]
+            # Missing required fields
+        }
+        
+        assert validate_log_entry(invalid_entry) == False
+    
+    @patch('core.logging.JSONSCHEMA_AVAILABLE', False)
+    def test_log_entry_validation_no_jsonschema(self):
+        """Test log entry validation when jsonschema is not available."""
+        with pytest.raises(ValueError, match="jsonschema library is required"):
+            validate_log_entry({})
+
+
+class TestUserModel:
+    """Test User model enhancements."""
+    
+    def test_soft_delete(self):
+        """Test soft delete functionality."""
+        user = User(id=1, first_name="John", last_name="Doe")
+        
+        assert not user.is_deleted()
+        
+        user.soft_delete()
+        
+        assert user.is_deleted()
+        assert user.deleted_at is not None
+    
+    def test_is_deleted_false(self):
+        """Test is_deleted returns False for active user."""
+        user = User(id=1, first_name="John", last_name="Doe")
+        
+        assert not user.is_deleted()
+
+
+@pytest.mark.parametrize("resolution_mode,expected_resolution", [
+    ("prefer_main", "kept_primary"),
+    ("prefer_merge", "kept_duplicate"),
+    ("prefer_longest", "kept_longest"),  # Merge value is longer
+])
+def test_conflict_resolution_modes(resolution_mode, expected_resolution, sample_users):
+    """Test automated conflict resolution with different preference modes."""
+    main_user, merge_user = sample_users
+    conflicts = {'phone': ('555-1234', '555-5678-ext123')}  # Merge value is longer
+    
+    resolved = _resolve_conflicts(main_user, merge_user, conflicts, resolution_mode)
+    
+    assert resolved['phone'][1] == expected_resolution

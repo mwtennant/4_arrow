@@ -7,13 +7,13 @@ from rich.console import Console
 from rich.table import Table
 
 from core.models import User
-from storage.database import db_manager
 
 
 console = Console()
 
 
 def get_profile(
+    session: Session,
     user_id: Optional[int] = None,
     email: Optional[str] = None,
     usbc_id: Optional[str] = None,
@@ -30,8 +30,6 @@ def get_profile(
     Returns:
         User object if found, None otherwise
     """
-    session: Session = db_manager.get_session()
-    
     try:
         if user_id is not None:
             user = session.query(User).filter(User.id == user_id).first()
@@ -46,8 +44,8 @@ def get_profile(
             
         return user
         
-    finally:
-        session.close()
+    except Exception:
+        raise
 
 
 def display_profile(user: User) -> None:
@@ -84,6 +82,7 @@ def display_profile(user: User) -> None:
 
 
 def edit_profile(
+    session: Session,
     user_id: int,
     first: Optional[str] = None,
     last: Optional[str] = None,
@@ -102,8 +101,6 @@ def edit_profile(
     Returns:
         True if successful, False otherwise
     """
-    session: Session = db_manager.get_session()
-    
     try:
         user = session.query(User).filter(User.id == user_id).first()
         if not user:
@@ -130,14 +127,14 @@ def edit_profile(
                 raise ValueError("Address cannot be empty")
             user.address = address
             
-        session.commit()
         return True
         
-    finally:
-        session.close()
+    except Exception:
+        session.rollback()
+        raise
 
 
-def delete_profile(user_id: int) -> bool:
+def delete_profile(session: Session, user_id: int) -> bool:
     """Delete a user profile.
     
     Args:
@@ -146,16 +143,14 @@ def delete_profile(user_id: int) -> bool:
     Returns:
         True if successful, False if user not found
     """
-    session: Session = db_manager.get_session()
-    
     try:
         user = session.query(User).filter(User.id == user_id).first()
         if not user:
             return False
             
         session.delete(user)
-        session.commit()
         return True
         
-    finally:
-        session.close()
+    except Exception:
+        session.rollback()
+        raise

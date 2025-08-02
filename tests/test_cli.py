@@ -249,7 +249,6 @@ class TestCreateUserCLI:
             first_name="Bob",
             last_name="Lane",
             email=None,
-            is_member=False
         )
         mock_create_user.return_value = mock_user
         
@@ -281,7 +280,6 @@ class TestCreateUserCLI:
             first_name="Alice",
             last_name="Smith",
             email="alice@example.com",
-            is_member=False
         )
         mock_create_user.return_value = mock_user
         
@@ -318,7 +316,6 @@ class TestCreateUserCLI:
             address="123 Main St",
             usbc_id="12345",
             tnba_id="67890",
-            is_member=False
         )
         mock_create_user.return_value = mock_user
         

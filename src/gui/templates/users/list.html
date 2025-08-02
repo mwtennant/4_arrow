@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+
+{% block title %}Users - 4th Arrow Tournament Control{% endblock %}
+
+{% block sidebar %}
+<nav class="sidebar-nav">
+    <h3>User Management</h3>
+    <ul class="sidebar-list">
+        <li><a href="{{ url_for('users.create') }}" class="sidebar-link">Add User</a></li>
+        <li><a href="{{ url_for('users.list') }}" class="sidebar-link active">List Users</a></li>
+        <li><a href="{{ url_for('users.search') }}" class="sidebar-link">Search Users</a></li>
+        <li><a href="{{ url_for('users.merge') }}" class="sidebar-link">Merge Profiles</a></li>
+    </ul>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="users-list">
+    <div class="page-header">
+        <h2>Users</h2>
+        <a href="{{ url_for('users.create') }}" class="btn btn-primary">Add User</a>
+    </div>
+    
+    {% if users %}
+    <div class="table-container">
+        <table class="users-table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th>Phone</th>
+                    <th>Created</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for user in users %}
+                <tr>
+                    <td>{{ user.id }}</td>
+                    <td>{{ user.first_name }} {{ user.last_name }}</td>
+                    <td>{{ user.email or 'N/A' }}</td>
+                    <td>{{ user.phone or 'N/A' }}</td>
+                    <td>{{ user.created_at.strftime('%Y-%m-%d') if user.created_at else 'N/A' }}</td>
+                    <td>
+                        <a href="{{ url_for('users.view', user_id=user.id) }}" class="btn btn-small">View</a>
+                        <a href="{{ url_for('users.edit', user_id=user.id) }}" class="btn btn-small">Edit</a>
+                        <a href="{{ url_for('users.delete', user_id=user.id) }}" class="btn btn-small btn-danger">Delete</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <h3>No users found</h3>
+        <p>Get started by creating your first user account.</p>
+        <a href="{{ url_for('users.create') }}" class="btn btn-primary">Add User</a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

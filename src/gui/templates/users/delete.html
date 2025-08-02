@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+
+{% block title %}Delete {{ user.first_name }} {{ user.last_name }} - 4th Arrow Tournament Control{% endblock %}
+
+{% block sidebar %}
+<nav class="sidebar-nav">
+    <h3>User Management</h3>
+    <ul class="sidebar-list">
+        <li><a href="{{ url_for('users.create') }}" class="sidebar-link">Add User</a></li>
+        <li><a href="{{ url_for('users.list') }}" class="sidebar-link">List Users</a></li>
+        <li><a href="{{ url_for('users.search') }}" class="sidebar-link">Search Users</a></li>
+        <li><a href="{{ url_for('users.merge') }}" class="sidebar-link">Merge Profiles</a></li>
+    </ul>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="delete-user">
+    <div class="page-header">
+        <h2>Delete Profile: {{ user.first_name }} {{ user.last_name }}</h2>
+        <div class="page-actions">
+            <a href="{{ url_for('users.view', user_id=user.id) }}" class="btn btn-secondary">Back to Profile</a>
+            <a href="{{ url_for('users.list') }}" class="btn btn-secondary">Back to Users</a>
+        </div>
+    </div>
+    
+    <div class="danger-zone">
+        <div class="warning-card">
+            <h3>⚠️ Danger Zone</h3>
+            <p><strong>This action cannot be undone.</strong></p>
+            <p>You are about to permanently delete the user profile for:</p>
+            
+            <div class="user-summary">
+                <ul>
+                    <li><strong>Name:</strong> {{ user.first_name }} {{ user.last_name }}</li>
+                    <li><strong>Email:</strong> {{ user.email or 'N/A' }}</li>
+                    <li><strong>Phone:</strong> {{ user.phone or 'N/A' }}</li>
+                    <li><strong>User ID:</strong> {{ user.id }}</li>
+                    {% if user.usbc_id %}
+                        <li><strong>USBC ID:</strong> {{ user.usbc_id }}</li>
+                    {% endif %}
+                    {% if user.tnba_id %}
+                        <li><strong>TNBA ID:</strong> {{ user.tnba_id }}</li>
+                    {% endif %}
+                </ul>
+            </div>
+            
+            <p>All data associated with this user will be permanently removed from the system.</p>
+        </div>
+        
+        <form method="POST" class="delete-form">
+            {{ form.hidden_tag() }}
+            
+            <div class="form-group">
+                {{ form.confirm() }}
+                {{ form.confirm.label(class="form-label checkbox-label") }}
+                {% if form.confirm.errors %}
+                    <ul class="form-errors">
+                        {% for error in form.confirm.errors %}
+                            <li>{{ error }}</li>
+                        {% endfor %}
+                    </ul>
+                {% endif %}
+            </div>
+            
+            <div class="form-actions">
+                {{ form.submit(class="btn btn-danger") }}
+                <a href="{{ url_for('users.view', user_id=user.id) }}" class="btn btn-secondary">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

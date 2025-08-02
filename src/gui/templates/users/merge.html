@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+
+{% block title %}Merge Profiles - 4th Arrow Tournament Control{% endblock %}
+
+{% block sidebar %}
+<nav class="sidebar-nav">
+    <h3>User Management</h3>
+    <ul class="sidebar-list">
+        <li><a href="{{ url_for('users.create') }}" class="sidebar-link">Add User</a></li>
+        <li><a href="{{ url_for('users.list') }}" class="sidebar-link">List Users</a></li>
+        <li><a href="{{ url_for('users.search') }}" class="sidebar-link">Search Users</a></li>
+        <li><a href="{{ url_for('users.merge') }}" class="sidebar-link active">Merge Profiles</a></li>
+    </ul>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="merge-profiles">
+    <div class="page-header">
+        <h2>Merge User Profiles</h2>
+        <a href="{{ url_for('users.list') }}" class="btn btn-secondary">Back to Users</a>
+    </div>
+    
+    <div class="merge-info">
+        <div class="info-card">
+            <h3>How Profile Merging Works</h3>
+            <ul>
+                <li>The <strong>main user</strong> profile will be kept and preserved</li>
+                <li>The <strong>merge users</strong> will be deleted after merging</li>
+                <li>Data from merge users will be combined into the main user</li>
+                <li>This operation <strong>cannot be undone</strong></li>
+            </ul>
+            <p><strong>Tip:</strong> Use the search function to find user IDs before merging.</p>
+        </div>
+    </div>
+    
+    <form method="POST" class="merge-form">
+        {{ form.hidden_tag() }}
+        
+        <div class="form-section">
+            <h3>Main User (Keep This Profile)</h3>
+            
+            <div class="form-group">
+                {{ form.main_user_id.label(class="form-label") }}
+                {{ form.main_user_id(class="form-input") }}
+                {% if form.main_user_id.errors %}
+                    <ul class="form-errors">
+                        {% for error in form.main_user_id.errors %}
+                            <li>{{ error }}</li>
+                        {% endfor %}
+                    </ul>
+                {% endif %}
+                <p class="form-help">Enter the User ID of the profile you want to keep.</p>
+            </div>
+        </div>
+        
+        <div class="form-section">
+            <h3>Users to Merge (Delete After Merging)</h3>
+            
+            <div class="form-group">
+                {{ form.merge_user_ids.label(class="form-label") }}
+                {{ form.merge_user_ids(class="form-input") }}
+                {% if form.merge_user_ids.errors %}
+                    <ul class="form-errors">
+                        {% for error in form.merge_user_ids.errors %}
+                            <li>{{ error }}</li>
+                        {% endfor %}
+                    </ul>
+                {% endif %}
+                <p class="form-help">Enter User IDs separated by commas (e.g., 2, 3, 4).</p>
+            </div>
+        </div>
+        
+        <div class="form-actions">
+            {{ form.submit(class="btn btn-danger") }}
+            <a href="{{ url_for('users.list') }}" class="btn btn-secondary">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

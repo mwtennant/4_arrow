@@ -1,4 +1,4 @@
-# Product Requirements Prompt: Create Users Management (Phase 1-C)
+# Product Requirements Prompt: Create Users Management (Phase User-C)
 
 ## Summary
 
@@ -6,7 +6,7 @@ Implement a flexible user creation system for the 4th Arrow Tournament Control a
 
 ## Step-by-Step Plan
 
-### Phase 1: CLI Command Implementation
+### Phase User: CLI Command Implementation
 
 1. Create `create` command with required and optional arguments
 2. Implement validation for required fields (first, last names)
@@ -178,8 +178,8 @@ class User(Base):
 ## Non-Goals / Future
 
 - User promotion to member (handled in future phase)
-- Profile editing capabilities (covered in Phase 1-B)
-- User authentication/login (covered in Phase 1-A)
+- Profile editing capabilities (covered in Phase User-B)
+- User authentication/login (covered in Phase User-A)
 - GUI flows (deferred to Phase N)
 - Password storage (bcrypt) - Phase 2
 - User deletion (separate feature)

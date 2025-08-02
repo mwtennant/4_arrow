@@ -1,0 +1,115 @@
+"""Authentication flow tests."""
+
+import pytest
+from flask import url_for
+
+
+class TestAuthRoutes:
+    """Test authentication routes."""
+    
+    def test_login_page_loads(self, client):
+        """Test login page loads correctly."""
+        response = client.get('/auth/login')
+        assert response.status_code == 200
+        assert b'Sign In' in response.data
+        assert b'Email' in response.data
+        assert b'Password' in response.data
+    
+    def test_login_redirects_if_already_authenticated(self, authenticated_client):
+        """Test login redirects to index if already authenticated."""
+        response = authenticated_client.get('/auth/login')
+        assert response.status_code == 302
+        assert response.location == '/'
+    
+    def test_successful_login(self, client, test_user):
+        """Test successful login redirects to dashboard."""
+        response = client.post('/auth/login', data={
+            'email': test_user.email,
+            'password': 'testpass123'
+        })
+        assert response.status_code == 302
+        assert response.location == '/'
+    
+    def test_failed_login_with_invalid_email(self, client):
+        """Test failed login with invalid email."""
+        response = client.post('/auth/login', data={
+            'email': 'invalid@example.com',
+            'password': 'testpass123'
+        })
+        assert response.status_code == 200
+        assert b'Invalid email or password' in response.data
+    
+    def test_failed_login_with_invalid_password(self, client, test_user):
+        """Test failed login with invalid password."""
+        response = client.post('/auth/login', data={
+            'email': test_user.email,
+            'password': 'wrongpassword'
+        })
+        assert response.status_code == 200
+        assert b'Invalid email or password' in response.data
+    
+    def test_logout_clears_session(self, authenticated_client):
+        """Test logout clears session and redirects to login."""
+        # Verify user is logged in
+        response = authenticated_client.get('/')
+        assert response.status_code == 200
+        
+        # Logout
+        response = authenticated_client.get('/auth/logout')
+        assert response.status_code == 302
+        assert '/auth/login' in response.location
+        
+        # Verify session is cleared
+        response = authenticated_client.get('/')
+        assert response.status_code == 302
+        assert '/auth/login' in response.location
+    
+    def test_login_form_validation(self, client):
+        """Test login form validation."""
+        # Test missing email
+        response = client.post('/auth/login', data={
+            'password': 'testpass123'
+        })
+        assert response.status_code == 200
+        assert b'This field is required' in response.data
+        
+        # Test missing password
+        response = client.post('/auth/login', data={
+            'email': 'test@example.com'
+        })
+        assert response.status_code == 200
+        assert b'This field is required' in response.data
+
+
+class TestAuthSession:
+    """Test authentication session management."""
+    
+    def test_session_persistence(self, client, test_user):
+        """Test session persists across requests."""
+        # Login
+        response = client.post('/auth/login', data={
+            'email': test_user.email,
+            'password': 'testpass123'
+        })
+        
+        # Check session data is set
+        with client.session_transaction() as session:
+            assert 'user_id' in session
+            assert session['user_id'] == test_user.id
+            assert 'user_name' in session
+            assert session['user_name'] == f"{test_user.first_name} {test_user.last_name}"
+    
+    def test_logout_clears_all_session_data(self, authenticated_client):
+        """Test logout clears all session data."""
+        # Verify session has data
+        with authenticated_client.session_transaction() as session:
+            assert 'user_id' in session
+            assert 'user_name' in session
+        
+        # Logout
+        authenticated_client.get('/auth/logout')
+        
+        # Verify session is cleared
+        with authenticated_client.session_transaction() as session:
+            assert 'user_id' not in session
+            assert 'user_name' not in session

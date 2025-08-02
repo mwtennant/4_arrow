@@ -8,7 +8,6 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 
 from core.models import User
-from storage.database import db_manager
 
 
 class AuthenticationError(Exception):
@@ -75,6 +74,7 @@ class AuthManager:
     
     @staticmethod
     def create_user(
+        session: Session,
         email: str,
         password: str,
         first_name: str,
@@ -124,9 +124,6 @@ class AuthManager:
         if not phone or not phone.strip():
             raise AuthenticationError("Phone number is required")
         
-        # Create database session
-        session = db_manager.get_session()
-        
         try:
             # Check if user already exists
             existing_user = session.query(User).filter(User.email == email.strip().lower()).first()
@@ -157,11 +154,9 @@ class AuthManager:
         except SQLAlchemyError as e:
             session.rollback()
             raise AuthenticationError(f"Database error: {e}")
-        finally:
-            session.close()
     
     @staticmethod
-    def authenticate_user(email: str, password: str) -> User:
+    def authenticate_user(session: Session, email: str, password: str) -> User:
         """Authenticate a user with email and password.
         
         Args:
@@ -180,8 +175,6 @@ class AuthManager:
         if not password or not password.strip():
             raise AuthenticationError("Password is required")
         
-        session = db_manager.get_session()
-        
         try:
             user = session.query(User).filter(User.email == email.strip().lower()).first()
             
@@ -195,8 +188,6 @@ class AuthManager:
             
         except SQLAlchemyError as e:
             raise AuthenticationError(f"Database error: {e}")
-        finally:
-            session.close()
 
 
 # Global auth manager instance

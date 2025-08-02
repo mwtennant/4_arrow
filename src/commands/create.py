@@ -55,8 +55,7 @@ def create_user(
         usbc_id=usbc_id.strip() if usbc_id else None,
         tnba_id=tnba_id.strip() if tnba_id else None,
         phone=phone.strip() if phone else None,
-        email=email.strip() if email else None,
-        is_member=False  # Default to non-member
+        email=email.strip() if email else None
     )
     
     # Save to database

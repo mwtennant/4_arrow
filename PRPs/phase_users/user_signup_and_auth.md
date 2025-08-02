@@ -6,7 +6,7 @@ Implement a user management system for the 4th Arrow Tournament Control applicat
 
 ## Step-by-Step Plan
 
-### Phase 1: Database Schema and Models
+### Phase User: Database Schema and Models
 
 1. Create SQLAlchemy models for User entity
 2. Set up database connection and table creation

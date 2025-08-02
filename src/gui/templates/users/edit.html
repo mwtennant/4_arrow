@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+
+{% block title %}Edit {{ user.first_name }} {{ user.last_name }} - 4th Arrow Tournament Control{% endblock %}
+
+{% block sidebar %}
+<nav class="sidebar-nav">
+    <h3>User Management</h3>
+    <ul class="sidebar-list">
+        <li><a href="{{ url_for('users.create') }}" class="sidebar-link">Add User</a></li>
+        <li><a href="{{ url_for('users.list') }}" class="sidebar-link">List Users</a></li>
+        <li><a href="{{ url_for('users.search') }}" class="sidebar-link">Search Users</a></li>
+        <li><a href="{{ url_for('users.merge') }}" class="sidebar-link">Merge Profiles</a></li>
+    </ul>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="edit-user">
+    <div class="page-header">
+        <h2>Edit Profile: {{ user.first_name }} {{ user.last_name }}</h2>
+        <div class="page-actions">
+            <a href="{{ url_for('users.view', user_id=user.id) }}" class="btn btn-secondary">Back to Profile</a>
+            <a href="{{ url_for('users.list') }}" class="btn btn-secondary">Back to Users</a>
+        </div>
+    </div>
+    
+    <form method="POST" class="edit-form">
+        {{ form.hidden_tag() }}
+        
+        <div class="form-section">
+            <h3>Personal Information</h3>
+            <p class="form-help">Leave fields empty to keep current values.</p>
+            
+            <div class="form-row">
+                <div class="form-group">
+                    {{ form.first_name.label(class="form-label") }}
+                    {{ form.first_name(class="form-input") }}
+                    {% if form.first_name.errors %}
+                        <ul class="form-errors">
+                            {% for error in form.first_name.errors %}
+                                <li>{{ error }}</li>
+                            {% endfor %}
+                        </ul>
+                    {% endif %}
+                </div>
+                
+                <div class="form-group">
+                    {{ form.last_name.label(class="form-label") }}
+                    {{ form.last_name(class="form-input") }}
+                    {% if form.last_name.errors %}
+                        <ul class="form-errors">
+                            {% for error in form.last_name.errors %}
+                                <li>{{ error }}</li>
+                            {% endfor %}
+                        </ul>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <div class="form-row">
+                <div class="form-group">
+                    {{ form.phone.label(class="form-label") }}
+                    {{ form.phone(class="form-input") }}
+                    {% if form.phone.errors %}
+                        <ul class="form-errors">
+                            {% for error in form.phone.errors %}
+                                <li>{{ error }}</li>
+                            {% endfor %}
+                        </ul>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <div class="form-group">
+                {{ form.address.label(class="form-label") }}
+                {{ form.address(class="form-textarea") }}
+                {% if form.address.errors %}
+                    <ul class="form-errors">
+                        {% for error in form.address.errors %}
+                            <li>{{ error }}</li>
+                        {% endfor %}
+                    </ul>
+                {% endif %}
+            </div>
+        </div>
+        
+        <div class="form-actions">
+            {{ form.submit(class="btn btn-primary") }}
+            <a href="{{ url_for('users.view', user_id=user.id) }}" class="btn btn-secondary">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

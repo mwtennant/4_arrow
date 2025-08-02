@@ -4,7 +4,7 @@ import pytest
 from unittest.mock import patch, MagicMock
 from sqlalchemy.exc import SQLAlchemyError
 
-from src.commands.list_users import list_users, build_user_query, display_users
+from src.commands.list_users import list_users, build_enhanced_user_query, display_users
 from core.models import User
 
 
@@ -276,20 +276,20 @@ class TestListUsers:
 
 
 class TestBuildUserQuery:
-    """Test cases for the build_user_query function."""
+    """Test cases for the build_enhanced_user_query function."""
 
-    def test_build_user_query_no_filters(self):
+    def test_build_enhanced_user_query_no_filters(self):
         """Test building query with no filters."""
         mock_session = MagicMock()
         mock_query = MagicMock()
         mock_session.query.return_value = mock_query
         
-        result = build_user_query(mock_session, {})
+        result = build_enhanced_user_query(mock_session, {})
         
         assert result == mock_query
         mock_session.query.assert_called_once_with(User)
 
-    def test_build_user_query_with_partial_match_filters(self):
+    def test_build_enhanced_user_query_with_partial_match_filters(self):
         """Test building query with partial match filters."""
         mock_session = MagicMock()
         mock_query = MagicMock()
@@ -304,12 +304,12 @@ class TestBuildUserQuery:
             'address': 'Main St'
         }
         
-        build_user_query(mock_session, filters)
+        build_enhanced_user_query(mock_session, filters)
         
         # Should call filter 5 times (once for each partial match filter)
         assert mock_query.filter.call_count == 5
 
-    def test_build_user_query_with_exact_match_filters(self):
+    def test_build_enhanced_user_query_with_exact_match_filters(self):
         """Test building query with exact match filters."""
         mock_session = MagicMock()
         mock_query = MagicMock()
@@ -321,12 +321,12 @@ class TestBuildUserQuery:
             'tnba_id': '67890'
         }
         
-        build_user_query(mock_session, filters)
+        build_enhanced_user_query(mock_session, filters)
         
         # Should call filter 2 times (once for each exact match filter)
         assert mock_query.filter.call_count == 2
 
-    def test_build_user_query_with_mixed_filters(self):
+    def test_build_enhanced_user_query_with_mixed_filters(self):
         """Test building query with both partial and exact match filters."""
         mock_session = MagicMock()
         mock_query = MagicMock()
@@ -340,7 +340,7 @@ class TestBuildUserQuery:
             'tnba_id': '67890'
         }
         
-        build_user_query(mock_session, filters)
+        build_enhanced_user_query(mock_session, filters)
         
         # Should call filter 4 times (for all 4 filters)
         assert mock_query.filter.call_count == 4

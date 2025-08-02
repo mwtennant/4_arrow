@@ -1,4 +1,4 @@
-# FEATURE: CLI – user_signup_and_auth (Phase 1-C)
+# FEATURE: CLI – user_signup_and_auth (Phase User-C)
 
 ## Overview
 

@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+
+{% block title %}{{ error_title }} - 4th Arrow Tournament Control{% endblock %}
+
+{% block content %}
+<div class="error-container">
+    <div class="error-card">
+        <h2>{{ error_title }}</h2>
+        <p>{{ error_message }}</p>
+        <div class="error-actions">
+            <a href="{{ url_for('index') }}" class="btn btn-primary">Go Home</a>
+            <a href="javascript:history.back()" class="btn btn-secondary">Go Back</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

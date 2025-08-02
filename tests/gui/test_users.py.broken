@@ -1,0 +1,194 @@
+"""User management interface tests."""
+
+import pytest
+from flask import url_for
+
+from core.auth import auth_manager
+from core.models import User
+from storage.database import db_manager
+
+
+class TestUserListRoute:
+    """Test user list route."""
+    
+    def test_user_list_requires_authentication(self, client):
+        """Test user list requires authentication."""
+        response = client.get('/users/')
+        assert response.status_code == 302
+        assert '/auth/login' in response.location
+    
+    def test_user_list_shows_users(self, authenticated_client, test_user):
+        """Test user list shows existing users."""
+        response = authenticated_client.get('/users/')
+        assert response.status_code == 200
+        assert b'Users' in response.data
+        assert test_user.first_name.encode() in response.data
+        assert test_user.last_name.encode() in response.data
+    
+    def test_user_list_empty_state(self, authenticated_client):
+        """Test user list empty state when no users exist."""
+        # Delete test user
+        session = db_manager.get_session()
+        try:
+            session.query(User).delete()
+            session.commit()
+        finally:
+            session.close()
+        
+        response = authenticated_client.get('/users/')
+        assert response.status_code == 200
+        assert b'No users found' in response.data
+        assert b'Add User' in response.data
+    
+    def test_user_list_navigation(self, authenticated_client):
+        """Test user list navigation elements."""
+        response = authenticated_client.get('/users/')
+        assert response.status_code == 200
+        assert b'Add User' in response.data
+        assert b'List Users' in response.data
+
+
+class TestUserCreateRoute:
+    """Test user creation route."""
+    
+    def test_user_create_requires_authentication(self, client):
+        """Test user create requires authentication."""
+        response = client.get('/users/create')
+        assert response.status_code == 302
+        assert '/auth/login' in response.location
+    
+    def test_user_create_form_loads(self, authenticated_client):
+        """Test user create form loads correctly."""
+        response = authenticated_client.get('/users/create')
+        assert response.status_code == 200
+        assert b'Create New User' in response.data
+        assert b'Email' in response.data
+        assert b'Password' in response.data
+        assert b'First Name' in response.data
+        assert b'Last Name' in response.data
+        assert b'Phone Number' in response.data
+    
+    def test_user_create_success(self, authenticated_client):
+        """Test successful user creation."""
+        response = authenticated_client.post('/users/create', data={
+            'email': 'newuser@example.com',
+            'password': 'newpass123',
+            'first_name': 'New',
+            'last_name': 'User',
+            'phone': '555-5678',
+            'address': '123 Main St',
+            'usbc_id': 'USBC123',
+            'tnba_id': 'TNBA456',
+            'registered_user': True
+        })
+        assert response.status_code == 302
+        assert response.location == '/users/'
+        
+        # Verify user was created
+        session = db_manager.get_session()
+        try:
+            user = session.query(User).filter(User.email == 'newuser@example.com').first()
+            assert user is not None
+            assert user.first_name == 'New'
+            assert user.last_name == 'User'
+            assert user.is_registered_user() is True
+        finally:
+            session.close()
+    
+    def test_user_create_validation_errors(self, authenticated_client):
+        """Test user create validation errors."""
+        response = authenticated_client.post('/users/create', data={
+            'email': 'invalid-email',
+            'password': '123',  # Too short
+            'first_name': '',  # Required
+            'last_name': 'User',
+            'phone': '555-5678'
+        })
+        assert response.status_code == 200
+        assert b'Invalid email address' in response.data
+        assert b'Field must be at least 6 characters long' in response.data
+        assert b'This field is required' in response.data
+    
+    def test_user_create_duplicate_email(self, authenticated_client, test_user):
+        """Test user create with duplicate email."""
+        response = authenticated_client.post('/users/create', data={
+            'email': test_user.email,
+            'password': 'newpass123',
+            'first_name': 'Duplicate',
+            'last_name': 'User',
+            'phone': '555-5678'
+        })
+        assert response.status_code == 200
+        assert b'Email already exists' in response.data
+
+
+class TestUserViewRoute:
+    """Test user view route."""
+    
+    def test_user_view_requires_authentication(self, client, test_user):
+        """Test user view requires authentication."""
+        response = client.get(f'/users/{test_user.id}')
+        assert response.status_code == 302
+        assert '/auth/login' in response.location
+    
+    def test_user_view_shows_user_details(self, authenticated_client, test_user):
+        """Test user view shows user details."""
+        response = authenticated_client.get(f'/users/{test_user.id}')
+        assert response.status_code == 200
+        assert test_user.first_name.encode() in response.data
+        assert test_user.last_name.encode() in response.data
+        assert test_user.email.encode() in response.data
+        assert test_user.phone.encode() in response.data
+    
+    def test_user_view_nonexistent_user(self, authenticated_client):
+        """Test user view with nonexistent user."""
+        response = authenticated_client.get('/users/99999')
+        assert response.status_code == 302
+        assert response.location == '/users/'
+    
+    def test_user_view_navigation(self, authenticated_client, test_user):
+        """Test user view navigation elements."""
+        response = authenticated_client.get(f'/users/{test_user.id}')
+        assert response.status_code == 200
+        assert b'Back to Users' in response.data
+
+
+class TestUserManagementIntegration:
+    """Test user management integration."""
+    
+    def test_create_user_then_view_in_list(self, authenticated_client):
+        """Test creating a user and then viewing it in the list."""
+        # Create user
+        response = authenticated_client.post('/users/create', data={
+            'email': 'integration@example.com',
+            'password': 'integrationpass123',
+            'first_name': 'Integration',
+            'last_name': 'Test',
+            'phone': '555-9999'
+        })
+        assert response.status_code == 302
+        
+        # View user list
+        response = authenticated_client.get('/users/')
+        assert response.status_code == 200
+        assert b'Integration' in response.data
+        assert b'Test' in response.data
+        assert b'integration@example.com' in response.data
+    
+    def test_navigation_between_user_pages(self, authenticated_client, test_user):
+        """Test navigation between user management pages."""
+        # Start at user list
+        response = authenticated_client.get('/users/')
+        assert response.status_code == 200
+        
+        # Navigate to create user
+        response = authenticated_client.get('/users/create')
+        assert response.status_code == 200
+        
+        # Navigate back to list
+        response = authenticated_client.get('/users/')
+        assert response.status_code == 200
+        
+        # Navigate to user view
+        response = authenticated_client.get(f'/users/{test_user.id}')
+        assert response.status_code == 200

@@ -11,6 +11,7 @@ from storage.database import db_manager
 from src.commands.create import create_user, validate_create_args
 from src.commands.merge import merge_profiles, validate_merge_args, handle_merge_errors
 from src.commands.list_users import list_users, display_users
+from src.commands.create_organization import create_organization_command
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 
@@ -42,16 +43,21 @@ def signup(
 ):
     """Sign up a new user account."""
     try:
-        user = auth_manager.create_user(
-            email=email,
-            password=password,
-            first_name=first,
-            last_name=last,
-            phone=phone,
-            address=address,
-            usbc_id=usbc_id,
-            tnba_id=tnba_id
-        )
+        session = db_manager.get_session()
+        try:
+            user = auth_manager.create_user(
+                session=session,
+                email=email,
+                password=password,
+                first_name=first,
+                last_name=last,
+                phone=phone,
+                address=address,
+                usbc_id=usbc_id,
+                tnba_id=tnba_id
+            )
+        finally:
+            session.close()
         click.echo(f"User account created successfully for {user.email}")
         
     except AuthenticationError as e:
@@ -68,7 +74,11 @@ def signup(
 def login(email: str, password: str):
     """Log in with email and password."""
     try:
-        user = auth_manager.authenticate_user(email, password)
+        session = db_manager.get_session()
+        try:
+            user = auth_manager.authenticate_user(session, email, password)
+        finally:
+            session.close()
         click.echo(f"Login successful. Welcome, {user.first_name} {user.last_name}!")
         
     except AuthenticationError as e:
@@ -94,7 +104,11 @@ def get_profile_cmd(user_id: Optional[int], email: Optional[str], usbc_id: Optio
         sys.exit(1)
     
     try:
-        user = get_profile(user_id=user_id, email=email, usbc_id=usbc_id, tnba_id=tnba_id)
+        session = db_manager.get_session()
+        try:
+            user = get_profile(session=session, user_id=user_id, email=email, usbc_id=usbc_id, tnba_id=tnba_id)
+        finally:
+            session.close()
         
         if user is None:
             click.echo("ERROR: No user found.", err=True)
@@ -121,7 +135,13 @@ def edit_profile_cmd(user_id: int, first: Optional[str], last: Optional[str], ph
         sys.exit(1)
     
     try:
-        success = edit_profile(user_id=user_id, first=first, last=last, phone=phone, address=address)
+        session = db_manager.get_session()
+        try:
+            success = edit_profile(session=session, user_id=user_id, first=first, last=last, phone=phone, address=address)
+            if success:
+                session.commit()
+        finally:
+            session.close()
         
         if not success:
             click.echo("ERROR: User not found", err=True)
@@ -147,7 +167,13 @@ def delete_profile_cmd(user_id: int, confirm: Optional[str]):
         sys.exit(1)
     
     try:
-        success = delete_profile(user_id)
+        session = db_manager.get_session()
+        try:
+            success = delete_profile(session=session, user_id=user_id)
+            if success:
+                session.commit()
+        finally:
+            session.close()
         
         if not success:
             click.echo("ERROR: User not found", err=True)
@@ -230,20 +256,52 @@ def create(
 
 
 @cli.command()
-@click.option('--main-id', type=int, required=True, help='ID of the main user to merge into')
-@click.option('--merge-id', type=int, multiple=True, required=True, help='ID(s) of user(s) to merge (can be repeated)')
-def merge(main_id: int, merge_id: tuple):
-    """Merge one or more user profiles into a main profile."""
+@click.option('-m', '--main-id', type=int, required=True, 
+              help='ID of the main user to merge into')
+@click.option('-i', '--merge-id', type=int, multiple=True, required=True,
+              help='ID(s) of user(s) to merge (can be repeated)')
+@click.option('--dry-run', is_flag=True, default=False,
+              help='Show planned actions without executing')
+@click.option('--prefer-main', 'resolution_mode', flag_value='prefer_main',
+              help='Automatically prefer main user values in conflicts')
+@click.option('--prefer-merge', 'resolution_mode', flag_value='prefer_merge', 
+              help='Automatically prefer merge user values in conflicts')
+@click.option('--prefer-longest', 'resolution_mode', flag_value='prefer_longest',
+              help='Automatically prefer longer values in conflicts')
+@click.option('--no-interactive', is_flag=True, default=False,
+              help='Use automatic resolution without prompts')
+def merge(main_id: int, merge_id: tuple, dry_run: bool, resolution_mode: str, no_interactive: bool):
+    """Merge one or more user profiles into a main profile.
+    
+    This command consolidates duplicate user profiles by merging all data
+    from the specified duplicate profiles into a single primary profile.
+    All historical data is preserved under the primary user ID.
+    
+    Examples:
+        # Basic merge with interactive conflict resolution
+        python main.py merge --main-id 3 --merge-id 5
+        
+        # Merge multiple users with short flags
+        python main.py merge -m 3 -i 5 -i 11
+        
+        # Preview merge actions without executing
+        python main.py merge -m 3 -i 5 --dry-run
+        
+        # Auto-resolve conflicts preferring main user values
+        python main.py merge -m 3 -i 5 --prefer-main --no-interactive
+    """
     merge_ids = list(merge_id)
     
-    # Validate arguments
-    validate_merge_args(main_id, merge_ids)
+    exit_code = merge_profiles(
+        main_id=main_id,
+        merge_ids=merge_ids,
+        dry_run=dry_run,
+        resolution_mode=resolution_mode,
+        no_interactive=no_interactive
+    )
     
-    try:
-        merge_profiles(main_id, merge_ids)
-        
-    except Exception as e:
-        handle_merge_errors(e)
+    if exit_code != 0:
+        sys.exit(exit_code)
 
 
 @cli.command(name='list-users')
@@ -254,6 +312,24 @@ def merge(main_id: int, merge_id: tuple):
 @click.option('--address', help='Address filter (partial match)')
 @click.option('--usbc_id', help='USBC ID filter (exact match)')
 @click.option('--tnba_id', help='TNBA ID filter (exact match)')
+@click.option('--role', 
+              type=click.Choice(['registered_user', 'unregistered_user', 'org_member']),
+              help='Filter by user role classification')
+@click.option('--member', is_flag=True, 
+              help='[DEPRECATED] Filter by registered users only. Use --role registered_user instead.')
+@click.option('--created-since', 
+              help='Show users created after YYYY-MM-DD (inclusive)')
+@click.option('--order',
+              type=click.Choice(['id', 'last_name', 'created_at']),
+              default='id',
+              help='Order results by field (default: id)')
+@click.option('--page-size',
+              type=int,
+              default=50,
+              help='Number of results per page (default: 50, 0 = no limit)')
+@click.option('--csv',
+              type=click.Path(),
+              help='Export to CSV file instead of displaying table')
 def list_users_cmd(
     first: Optional[str] = None,
     last: Optional[str] = None,
@@ -261,28 +337,114 @@ def list_users_cmd(
     phone: Optional[str] = None,
     address: Optional[str] = None,
     usbc_id: Optional[str] = None,
-    tnba_id: Optional[str] = None
+    tnba_id: Optional[str] = None,
+    role: Optional[str] = None,
+    member: bool = False,
+    created_since: Optional[str] = None,
+    order: str = 'id',
+    page_size: int = 50,
+    csv: Optional[str] = None
 ):
-    """List users with optional filters."""
+    """List users with enhanced filtering, ordering, pagination, and CSV export.
+    
+    Examples:
+    
+    \b
+    # Basic usage
+    python main.py list-users
+    
+    \b
+    # Filter by role and order by name
+    python main.py list-users --role registered_user --order last_name
+    
+    \b
+    # Export to CSV with date filter
+    python main.py list-users --created-since 2024-01-01 --csv users.csv
+    
+    \b
+    # Complex filtering with pagination
+    python main.py list-users --first John --role registered_user --page-size 10
+    """
     try:
-        users = list_users(
+        from core.models import ProfileRole
+        from src.commands.list_users import list_users_enhanced, parse_date_filter
+        from utils.csv_writer import validate_csv_path
+        import warnings
+        
+        # Handle deprecated --member flag
+        if member and role:
+            click.echo("ERROR: Cannot use both --member and --role flags", err=True)
+            sys.exit(4)
+        
+        if member:
+            warnings.warn(
+                "--member flag is deprecated. Use --role registered_user instead.",
+                DeprecationWarning,
+                stacklevel=2
+            )
+            role = "registered_user"
+        
+        # Parse role filter
+        role_filter = None
+        if role:
+            role_filter = ProfileRole(role)
+        
+        # Parse date filter  
+        created_since_filter = None
+        if created_since:
+            try:
+                created_since_filter = parse_date_filter(created_since)
+            except click.BadParameter as e:
+                click.echo(f"ERROR: {e}", err=True)
+                sys.exit(4)
+        
+        # Parse CSV path
+        csv_path = None
+        if csv:
+            try:
+                csv_path = validate_csv_path(csv)
+            except ValueError as e:
+                click.echo(f"ERROR: {e}", err=True)
+                sys.exit(1)
+        
+        # Validate page size
+        if page_size < 0:
+            click.echo("ERROR: page-size must be >= 0", err=True)
+            sys.exit(4)
+        
+        # Call enhanced list users function
+        users_data = list_users_enhanced(
             first=first,
             last=last,
             email=email,
             phone=phone,
             address=address,
             usbc_id=usbc_id,
-            tnba_id=tnba_id
+            tnba_id=tnba_id,
+            role=role_filter,
+            created_since=created_since_filter,
+            order=order,
+            page_size=page_size,
+            csv_path=csv_path
         )
         
-        display_users(users)
+        # Success message for CSV export
+        if csv_path:
+            click.echo(f"Exported {len(users_data)} users to {csv_path}")
         
     except SQLAlchemyError as e:
         click.echo(f"ERROR: Database error occurred: {e}", err=True)
         sys.exit(1)
+    except KeyboardInterrupt:
+        click.echo("\n[yellow]Operation interrupted by user[/yellow]")
+        sys.exit(5)
     except Exception as e:
         click.echo(f"ERROR: An unexpected error occurred: {e}", err=True)
         sys.exit(1)
+
+
+# Add the create-organization command to the CLI group
+cli.add_command(create_organization_command, name='create-organization')
 
 
 if __name__ == '__main__':

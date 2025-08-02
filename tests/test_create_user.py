@@ -28,7 +28,7 @@ class TestCreateUser:
             assert user.address is None
             assert user.usbc_id is None
             assert user.tnba_id is None
-            assert user.is_member is False
+            assert user.is_unregistered_user() is True
             
             mock_session.add.assert_called_once()
             mock_session.commit.assert_called_once()
@@ -57,7 +57,7 @@ class TestCreateUser:
             assert user.address == "123 Main St"
             assert user.usbc_id == "12345"
             assert user.tnba_id == "67890"
-            assert user.is_member is False
+            assert user.is_registered_user() is True
             
             mock_session.add.assert_called_once()
             mock_session.commit.assert_called_once()
@@ -81,7 +81,7 @@ class TestCreateUser:
             assert user.email is None
             assert user.phone == "555-5678"
             assert user.address == "456 Oak Ave"
-            assert user.is_member is False
+            assert user.is_unregistered_user() is True
             
             mock_session.add.assert_called_once()
             mock_session.commit.assert_called_once()

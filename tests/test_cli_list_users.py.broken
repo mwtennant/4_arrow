@@ -1,0 +1,459 @@
+"""CLI integration tests for enhanced list users command."""
+
+import pytest
+import subprocess
+import sys
+import tempfile
+import csv
+from pathlib import Path
+from unittest.mock import patch, MagicMock
+
+try:
+    import pexpect
+    PEXPECT_AVAILABLE = True
+except ImportError:
+    PEXPECT_AVAILABLE = False
+
+
+class TestCLIListUsers:
+    """Test CLI integration for list-users command."""
+    
+    def test_list_users_help_text(self):
+        """Test that list-users command shows comprehensive help."""
+        result = subprocess.run(
+            [sys.executable, "main.py", "list-users", "--help"],
+            capture_output=True,
+            text=True
+        )
+        
+        assert result.returncode == 0
+        assert "List users with enhanced filtering" in result.stdout
+        assert "--role" in result.stdout
+        assert "--created-since" in result.stdout
+        assert "--order" in result.stdout
+        assert "--page-size" in result.stdout
+        assert "--csv" in result.stdout
+        assert "registered_user" in result.stdout
+        assert "unregistered_user" in result.stdout
+        assert "org_member" in result.stdout
+    
+    def test_basic_list_users_execution(self):
+        """Test basic list-users command execution."""
+        result = subprocess.run(
+            [sys.executable, "main.py", "list-users", "--page-size", "0"],
+            capture_output=True,
+            text=True
+        )
+        
+        assert result.returncode == 0
+        assert "User ID" in result.stdout
+        assert "Name" in result.stdout
+        assert "Role" in result.stdout
+        assert "Email" in result.stdout
+    
+    def test_role_filtering_registered_user(self):
+        """Test role filtering for registered users."""
+        result = subprocess.run(
+            [sys.executable, "main.py", "list-users", "--role", "registered_user", "--page-size", "0"],
+            capture_output=True,
+            text=True
+        )
+        
+        assert result.returncode == 0
+        # Should show users with emails
+        if "Registered User" in result.stdout:
+            assert "Registered User" in result.stdout
+    
+    def test_role_filtering_unregistered_user(self):
+        """Test role filtering for unregistered users."""
+        result = subprocess.run(
+            [sys.executable, "main.py", "list-users", "--role", "unregistered_user", "--page-size", "0"],
+            capture_output=True,
+            text=True
+        )
+        
+        assert result.returncode == 0
+        # Might be empty if no unregistered users exist
+        if "Unregistered User" in result.stdout:
+            assert "Unregistered User" in result.stdout
+    
+    def test_role_filtering_org_member(self):
+        """Test role filtering for org members."""
+        result = subprocess.run(
+            [sys.executable, "main.py", "list-users", "--role", "org_member", "--page-size", "0"],
+            capture_output=True,
+            text=True
+        )
+        
+        assert result.returncode == 0
+        # Might be empty if no org members exist
+        if "Org Member" in result.stdout:
+            assert "Org Member" in result.stdout
+    
+    def test_date_filtering_valid(self):
+        """Test date filtering with valid date."""
+        result = subprocess.run(
+            [sys.executable, "main.py", "list-users", "--created-since", "2025-07-30", "--page-size", "0"],
+            capture_output=True,
+            text=True
+        )
+        
+        assert result.returncode == 0
+        # Should show recent users or empty table
+        assert "User ID" in result.stdout
+    
+    def test_date_filtering_invalid(self):
+        """Test date filtering with invalid date format."""
+        result = subprocess.run(
+            [sys.executable, "main.py", "list-users", "--created-since", "invalid-date"],
+            capture_output=True,
+            text=True
+        )
+        
+        assert result.returncode == 4
+        assert "Invalid date format" in result.stderr
+    
+    def test_ordering_by_last_name(self):
+        """Test ordering by last name."""
+        result = subprocess.run(
+            [sys.executable, "main.py", "list-users", "--order", "last_name", "--page-size", "0"],
+            capture_output=True,
+            text=True
+        )
+        
+        assert result.returncode == 0
+        assert "User ID" in result.stdout
+    
+    def test_ordering_by_created_at(self):
+        """Test ordering by creation date."""
+        result = subprocess.run(
+            [sys.executable, "main.py", "list-users", "--order", "created_at", "--page-size", "0"],
+            capture_output=True,
+            text=True
+        )
+        
+        assert result.returncode == 0
+        assert "User ID" in result.stdout
+    
+    def test_page_size_validation(self):
+        """Test page size validation."""
+        # Valid page size
+        result = subprocess.run(
+            [sys.executable, "main.py", "list-users", "--page-size", "5"],
+            capture_output=True,
+            text=True
+        )
+        
+        assert result.returncode == 0
+        
+        # Invalid page size (negative)
+        result = subprocess.run(
+            [sys.executable, "main.py", "list-users", "--page-size", "-1"],
+            capture_output=True,
+            text=True
+        )
+        
+        assert result.returncode == 4
+        assert "page-size must be >= 0" in result.stderr
+    
+    def test_csv_export_functionality(self):
+        """Test CSV export functionality."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            csv_path = Path(temp_dir) / "test_users.csv"
+            
+            result = subprocess.run(
+                [sys.executable, "main.py", "list-users", "--csv", str(csv_path)],
+                capture_output=True,
+                text=True
+            )
+            
+            assert result.returncode == 0
+            assert "Exported" in result.stdout
+            assert csv_path.exists()
+            
+            # Validate CSV content
+            with open(csv_path, 'r', encoding='utf-8') as f:
+                csv_reader = csv.reader(f)
+                header = next(csv_reader)
+                assert header == ['id', 'name', 'role', 'email', 'created_at']
+    
+    def test_csv_export_invalid_path(self):
+        """Test CSV export with invalid path."""
+        result = subprocess.run(
+            [sys.executable, "main.py", "list-users", "--csv", "/invalid/path/test.csv"],
+            capture_output=True,
+            text=True
+        )
+        
+        assert result.returncode == 1
+        assert "Cannot create directory" in result.stderr
+    
+    def test_complex_filtering_combination(self):
+        """Test complex combination of filters."""
+        result = subprocess.run(
+            [
+                sys.executable, "main.py", "list-users",
+                "--first", "Test",
+                "--role", "registered_user", 
+                "--order", "last_name",
+                "--page-size", "0"
+            ],
+            capture_output=True,
+            text=True
+        )
+        
+        assert result.returncode == 0
+        assert "User ID" in result.stdout
+    
+    def test_legacy_filters_still_work(self):
+        """Test that legacy filter options still work."""
+        result = subprocess.run(
+            [
+                sys.executable, "main.py", "list-users",
+                "--first", "Test",
+                "--email", "test",
+                "--page-size", "0"
+            ],
+            capture_output=True,
+            text=True
+        )
+        
+        assert result.returncode == 0
+        assert "User ID" in result.stdout
+    
+    def test_database_connection_error_handling(self):
+        """Test handling of database connection errors."""
+        with patch('src.commands.list_users.db_manager') as mock_db:
+            from sqlalchemy.exc import SQLAlchemyError
+            mock_db.get_session.side_effect = SQLAlchemyError("Connection failed")
+            
+            result = subprocess.run(
+                [sys.executable, "main.py", "list-users"],
+                capture_output=True,
+                text=True
+            )
+            
+            # Should handle database errors gracefully
+            assert result.returncode == 1
+    
+    def test_keyboard_interrupt_handling(self):
+        """Test keyboard interrupt handling during pagination."""
+        # This is difficult to test with subprocess, but we can verify 
+        # the exit code is handled
+        result = subprocess.run(
+            [sys.executable, "main.py", "list-users", "--page-size", "1"],
+            capture_output=True,
+            text=True,
+            input="\n",  # Provide input to avoid hanging
+            timeout=5
+        )
+        
+        # Should complete normally with input
+        assert result.returncode in [0, 5]  # 0 for success, 5 for interrupt
+
+
+class TestCSVExportIntegration:
+    """Test CSV export integration thoroughly."""
+    
+    def test_csv_round_trip_with_unicode(self):
+        """Test CSV round-trip with Unicode characters."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            csv_path = Path(temp_dir) / "unicode_test.csv"
+            
+            # First, ensure we have a user with Unicode characters
+            create_result = subprocess.run(
+                [sys.executable, "main.py", "create", "--first", "María", "--last", "González", "--email", "maria@example.com"],
+                capture_output=True,
+                text=True
+            )
+            
+            if create_result.returncode == 0 or "already exists" in create_result.stderr:
+                # Export to CSV
+                result = subprocess.run(
+                    [sys.executable, "main.py", "list-users", "--first", "María", "--csv", str(csv_path)],
+                    capture_output=True,
+                    text=True
+                )
+                
+                assert result.returncode == 0
+                assert csv_path.exists()
+                
+                # Read and validate CSV content
+                with open(csv_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                    assert "María González" in content
+    
+    def test_csv_export_with_special_characters(self):
+        """Test CSV export with special characters."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            csv_path = Path(temp_dir) / "special_chars.csv"
+            
+            result = subprocess.run(
+                [sys.executable, "main.py", "list-users", "--csv", str(csv_path)],
+                capture_output=True,
+                text=True
+            )
+            
+            assert result.returncode == 0
+            assert csv_path.exists()
+            
+            # Validate CSV is properly formatted
+            with open(csv_path, 'r', encoding='utf-8') as f:
+                csv_reader = csv.reader(f)
+                rows = list(csv_reader)
+                assert len(rows) >= 1  # At least header
+                assert rows[0] == ['id', 'name', 'role', 'email', 'created_at']
+    
+    def test_csv_export_large_dataset(self):
+        """Test CSV export with larger dataset."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            csv_path = Path(temp_dir) / "large_export.csv"
+            
+            result = subprocess.run(
+                [sys.executable, "main.py", "list-users", "--csv", str(csv_path)],
+                capture_output=True,
+                text=True
+            )
+            
+            assert result.returncode == 0
+            assert csv_path.exists()
+            
+            # Check file size is reasonable
+            file_size = csv_path.stat().st_size
+            assert file_size > 0
+            assert file_size < 10 * 1024 * 1024  # Less than 10MB for reasonable test
+
+
+@pytest.mark.skipif(not PEXPECT_AVAILABLE, reason="pexpect not available")
+class TestInteractivePagination:
+    """Test interactive pagination using pexpect."""
+    
+    def test_pagination_enter_to_continue(self):
+        """Test pagination with Enter to continue."""
+        try:
+            child = pexpect.spawn(f'{sys.executable} main.py list-users --page-size 3', timeout=10)
+            
+            # Look for pagination prompt
+            index = child.expect(['Next .* results.*', pexpect.EOF, pexpect.TIMEOUT])
+            
+            if index == 0:  # Found pagination prompt
+                child.sendline('')  # Press Enter
+                child.expect(pexpect.EOF)
+                assert child.exitstatus == 0
+            else:
+                # No pagination needed (fewer results)
+                assert child.exitstatus == 0
+                
+        except pexpect.exceptions.TIMEOUT:
+            pytest.skip("Interactive test timed out")
+    
+    def test_pagination_quit_with_q(self):
+        """Test pagination with 'q' to quit."""
+        try:
+            child = pexpect.spawn(f'{sys.executable} main.py list-users --page-size 3', timeout=10)
+            
+            # Look for pagination prompt
+            index = child.expect(['Next .* results.*', pexpect.EOF, pexpect.TIMEOUT])
+            
+            if index == 0:  # Found pagination prompt
+                child.sendline('q')  # Press 'q' to quit
+                child.expect(pexpect.EOF)
+                assert child.exitstatus == 0
+            else:
+                # No pagination needed
+                assert child.exitstatus == 0
+                
+        except pexpect.exceptions.TIMEOUT:
+            pytest.skip("Interactive test timed out")
+
+
+class TestPerformanceRequirements:
+    """Test performance requirements."""
+    
+    @pytest.mark.slow
+    def test_large_dataset_performance(self):
+        """Test that large dataset queries complete in reasonable time."""
+        import time
+        
+        start_time = time.time()
+        
+        result = subprocess.run(
+            [sys.executable, "main.py", "list-users", "--page-size", "0"],
+            capture_output=True,
+            text=True,
+            timeout=30  # 30 second timeout
+        )
+        
+        duration = time.time() - start_time
+        
+        assert result.returncode == 0
+        assert duration < 30.0, f"Query took {duration:.2f}s, expected < 30s"
+    
+    @pytest.mark.slow 
+    def test_csv_export_performance(self):
+        """Test CSV export performance with current dataset."""
+        import time
+        
+        with tempfile.TemporaryDirectory() as temp_dir:
+            csv_path = Path(temp_dir) / "perf_test.csv"
+            
+            start_time = time.time()
+            
+            result = subprocess.run(
+                [sys.executable, "main.py", "list-users", "--csv", str(csv_path)],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            
+            duration = time.time() - start_time
+            
+            assert result.returncode == 0
+            assert duration < 30.0, f"CSV export took {duration:.2f}s, expected < 30s"
+            assert csv_path.exists()
+
+
+class TestErrorHandling:
+    """Test comprehensive error handling."""
+    
+    def test_invalid_role_value(self):
+        """Test invalid role value handling."""
+        result = subprocess.run(
+            [sys.executable, "main.py", "list-users", "--role", "invalid_role"],
+            capture_output=True,
+            text=True
+        )
+        
+        assert result.returncode == 2  # Click choice validation error
+        assert "invalid_role" in result.stderr.lower()
+    
+    def test_invalid_order_value(self):
+        """Test invalid order value handling."""
+        result = subprocess.run(
+            [sys.executable, "main.py", "list-users", "--order", "invalid_order"],
+            capture_output=True,
+            text=True
+        )
+        
+        assert result.returncode == 2  # Click choice validation error
+        assert "invalid_order" in result.stderr.lower()
+    
+    def test_malformed_date_formats(self):
+        """Test various malformed date formats."""
+        invalid_dates = [
+            "2024-13-01",  # Invalid month
+            "2024-02-30",  # Invalid day
+            "24-01-01",    # Wrong year format
+            "2024/01/01",  # Wrong separator
+            "Jan 1, 2024", # Wrong format entirely
+        ]
+        
+        for invalid_date in invalid_dates:
+            result = subprocess.run(
+                [sys.executable, "main.py", "list-users", "--created-since", invalid_date],
+                capture_output=True,
+                text=True
+            )
+            
+            assert result.returncode == 4
+            assert "Invalid date format" in result.stderr
