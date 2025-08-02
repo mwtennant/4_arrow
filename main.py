@@ -12,6 +12,10 @@ from src.commands.create import create_user, validate_create_args
 from src.commands.merge import merge_profiles, validate_merge_args, handle_merge_errors
 from src.commands.list_users import list_users, display_users
 from src.commands.create_organization import create_organization_command
+from src.commands.edit_organization import edit_organization_command
+from src.commands.create_org_permission import create_org_permission_command
+from src.commands.create_org_role import create_org_role_command
+from src.commands.add_org_user import add_org_user_command
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 
@@ -445,6 +449,18 @@ def list_users_cmd(
 
 # Add the create-organization command to the CLI group
 cli.add_command(create_organization_command, name='create-organization')
+
+# Add the edit-organization command to the CLI group
+cli.add_command(edit_organization_command, name='edit-organization')
+
+# Add the create-org-permission command to the CLI group
+cli.add_command(create_org_permission_command, name='create-org-permission')
+
+# Add the create-org-role command to the CLI group
+cli.add_command(create_org_role_command, name='create-org-role')
+
+# Add the add-org-user command to the CLI group
+cli.add_command(add_org_user_command, name='add-org-user')
 
 
 if __name__ == '__main__':
